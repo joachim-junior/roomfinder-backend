@@ -1,0 +1,49 @@
+{
+    "name": "room-finder-backend",
+    "version": "1.0.0",
+    "description": "Backend API for Room Finder - Airbnb clone for Cameroon",
+    "main": "src/server.js",
+    "scripts": {
+        "start": "node src/server.js",
+        "dev": "nodemon src/server.js",
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "db:generate": "prisma generate",
+        "db:push": "prisma db push",
+        "db:migrate": "prisma migrate dev",
+        "db:studio": "prisma studio",
+        "db:reset": "prisma migrate reset",
+        "db:seed": "node prisma/seed.js",
+        "create-admin": "node src/utils/createAdminUser.js"
+    },
+    "keywords": [
+        "airbnb",
+        "cameroon",
+        "booking",
+        "guesthouse",
+        "api"
+    ],
+    "author": "",
+    "license": "ISC",
+    "devDependencies": {
+        "nodemon": "^3.0.1"
+    },
+    "dependencies": {
+        "@prisma/client": "^6.13.0",
+        "axios": "^1.11.0",
+        "bcrypt": "^6.0.0",
+        "bcryptjs": "^2.4.3",
+        "cors": "^2.8.5",
+        "crypto": "^1.0.1",
+        "dotenv": "^16.3.1",
+        "express": "^4.18.2",
+        "express-validator": "^7.2.1",
+        "firebase-admin": "^13.4.0",
+        "helmet": "^7.1.0",
+        "jsonwebtoken": "^9.0.2",
+        "morgan": "^1.10.0",
+        "multer": "^2.0.2",
+        "nodemailer": "^7.0.5",
+        "prisma": "^6.13.0",
+        "sharp": "^0.34.3"
+    }
+}
