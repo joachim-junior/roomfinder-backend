@@ -11,6 +11,7 @@ router.post("/webhook/payment", bookingController.handlePaymentWebhook);
 router.use(authenticateToken);
 
 // Guest routes
+router.get("/calculate-fees", bookingController.calculateBookingFees);
 router.post("/", validateBooking, bookingController.createBooking);
 router.get("/my-bookings", bookingController.getUserBookings);
 router.get("/availability", bookingController.checkAvailability);
@@ -20,14 +21,14 @@ router.put("/:id/cancel", bookingController.cancelBooking);
 
 // Host routes
 router.get(
-  "/host/bookings",
-  requireRole(["HOST", "ADMIN"]),
-  bookingController.getHostBookings
+    "/host/bookings",
+    requireRole(["HOST", "ADMIN"]),
+    bookingController.getHostBookings
 );
 router.put(
-  "/:id/status",
-  requireRole(["HOST", "ADMIN"]),
-  bookingController.updateBookingStatus
+    "/:id/status",
+    requireRole(["HOST", "ADMIN"]),
+    bookingController.updateBookingStatus
 );
 
 module.exports = router;
