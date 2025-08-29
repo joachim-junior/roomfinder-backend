@@ -14,7 +14,8 @@
 10. [Enquiry Management](#enquiry-management)
 11. [Favorites Management](#favorites-management)
 12. [Notifications](#notifications)
-13. [File Upload](#file-upload)
+13. [Push Notifications](#push-notifications)
+14. [File Upload](#file-upload)
 
 ## Base URL
 
@@ -2146,22 +2147,23 @@ Authorization: Bearer <token>
       {
         "id": "cme6itv8j0004u9i4x6c38wmq",
         "title": "New Booking Request",
-        "body": "You have a new booking request for Cozy Beachfront Villa.",
+        "body": "You have a new booking request for Cozy Beachfront Villa",
         "type": "NEW_BOOKING",
-        "status": "UNREAD",
         "data": {
           "bookingId": "cme6itsi5000bu9i4canbgxat",
           "propertyId": "cme6itqoo0001u9i4x6c38wmq"
         },
-        "createdAt": "2025-08-11T02:53:53.616Z",
-        "readAt": null
+        "status": "UNREAD",
+        "createdAt": "2025-08-11T02:53:53.616Z"
       }
     ],
     "pagination": {
-      "page": 1,
-      "limit": 10,
-      "total": 1,
-      "pages": 1
+      "currentPage": 1,
+      "totalPages": 1,
+      "totalItems": 1,
+      "itemsPerPage": 10,
+      "hasNextPage": false,
+      "hasPrevPage": false
     }
   }
 }
@@ -2182,20 +2184,20 @@ Authorization: Bearer <token>
 {
   "success": true,
   "data": {
-    "total": 5,
-    "unread": 3,
-    "read": 2,
+    "total": 15,
+    "unread": 8,
+    "read": 7,
     "breakdown": [
       {
         "status": "UNREAD",
         "_count": {
-          "status": 3
+          "status": 8
         }
       },
       {
         "status": "READ",
         "_count": {
-          "status": 2
+          "status": 7
         }
       }
     ]
@@ -2217,16 +2219,7 @@ Authorization: Bearer <token>
 ```json
 {
   "success": true,
-  "message": "Notification marked as read",
-  "data": {
-    "id": "cme6itv8j0004u9i4x6c38wmq",
-    "title": "New Booking Request",
-    "body": "You have a new booking request for Cozy Beachfront Villa.",
-    "type": "NEW_BOOKING",
-    "status": "READ",
-    "readAt": "2025-08-11T02:55:00.000Z",
-    "createdAt": "2025-08-11T02:53:53.616Z"
-  }
+  "message": "Notification marked as read"
 }
 ```
 
@@ -2244,9 +2237,9 @@ Authorization: Bearer <token>
 ```json
 {
   "success": true,
-  "message": "3 notifications marked as read",
+  "message": "8 notifications marked as read",
   "data": {
-    "updatedCount": 3
+    "updatedCount": 8
   }
 }
 ```
@@ -2289,6 +2282,7 @@ Authorization: Bearer <token>
     "pushNotifications": true,
     "bookingNotifications": true,
     "reviewNotifications": true,
+    "paymentNotifications": true,
     "createdAt": "2025-08-11T01:28:01.559Z",
     "updatedAt": "2025-08-11T01:28:01.559Z"
   }
@@ -2306,18 +2300,12 @@ Content-Type: application/json
 
 {
   "emailNotifications": true,
-  "pushNotifications": false,
+  "pushNotifications": true,
   "bookingNotifications": true,
-  "reviewNotifications": false
+  "reviewNotifications": false,
+  "paymentNotifications": true
 }
 ```
-
-**Request Body Fields:**
-
-- `emailNotifications` (optional): Enable/disable email notifications
-- `pushNotifications` (optional): Enable/disable push notifications
-- `bookingNotifications` (optional): Enable/disable booking notifications
-- `reviewNotifications` (optional): Enable/disable review notifications
 
 **Response (Success - 200):**
 
@@ -2328,43 +2316,206 @@ Content-Type: application/json
   "data": {
     "userId": "cme6fo5xz0000u9mo5li7lln7",
     "emailNotifications": true,
-    "pushNotifications": false,
+    "pushNotifications": true,
     "bookingNotifications": true,
     "reviewNotifications": false,
+    "paymentNotifications": true,
     "createdAt": "2025-08-11T01:28:01.559Z",
     "updatedAt": "2025-08-11T02:55:00.000Z"
   }
 }
 ```
 
-### Notification Types
+### 13. Push Notifications
 
-- `NEW_BOOKING` - New booking request received
-- `BOOKING_CONFIRMED` - Booking confirmed by guest
-- `BOOKING_CANCELLED` - Booking cancelled
-- `PAYMENT_RECEIVED` - Payment received for booking
-- `REVIEW_RECEIVED` - New review received
-- `ENQUIRY_RECEIVED` - New property enquiry
-- `HOST_APPROVED` - Host application approved
-- `HOST_REJECTED` - Host application rejected
-- `SYSTEM_ANNOUNCEMENT` - Platform announcements
+#### 13.1 Register Device Token
 
-### Notification Status Values
+**Request:**
 
-- `UNREAD` - Notification has not been read
-- `READ` - Notification has been read
+```http
+POST /push-notifications/register-token
+Authorization: Bearer <token>
+Content-Type: application/json
 
-### Notification Management Features
+{
+  "deviceToken": "fcm-token-from-device",
+  "platform": "android"
+}
+```
 
-- **Filtering**: Filter by type, status, and date
-- **Pagination**: Browse through large numbers of notifications
-- **Bulk Actions**: Mark all notifications as read
-- **Preferences**: Control which notifications you receive
-- **Cleanup**: Delete old notifications
+**Request Body Fields:**
 
-### 13. File Upload
+- `deviceToken` (required): FCM token from mobile device
+- `platform` (optional): Device platform (android, ios, web) - default: android
 
-#### 13.1 Upload Property Images
+**Response (Success - 201):**
+
+```json
+{
+  "success": true,
+  "message": "Device token registered successfully",
+  "data": {
+    "deviceToken": "fcm-token-from-device",
+    "platform": "android",
+    "registeredAt": "2025-08-11T02:53:53.616Z"
+  }
+}
+```
+
+#### 13.2 Unregister Device Token
+
+**Request:**
+
+```http
+POST /push-notifications/unregister-token
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "deviceToken": "fcm-token-from-device"
+}
+```
+
+**Response (Success - 200):**
+
+```json
+{
+  "success": true,
+  "message": "Device token unregistered successfully"
+}
+```
+
+#### 13.3 Get User's Device Tokens
+
+**Request:**
+
+```http
+GET /push-notifications/device-tokens
+Authorization: Bearer <token>
+```
+
+**Response (Success - 200):**
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "cme6device0001u9i4x6c38wmq",
+      "token": "fcm-token-1",
+      "platform": "android",
+      "isActive": true,
+      "createdAt": "2025-08-11T02:53:53.616Z",
+      "lastUsed": "2025-08-11T02:53:53.616Z"
+    },
+    {
+      "id": "cme6device0002u9i4x6c38wmq",
+      "token": "fcm-token-2",
+      "platform": "ios",
+      "isActive": true,
+      "createdAt": "2025-08-11T02:54:00.000Z",
+      "lastUsed": "2025-08-11T02:54:00.000Z"
+    }
+  ]
+}
+```
+
+#### 13.4 Send Test Push Notification
+
+**Request:**
+
+```http
+POST /push-notifications/test
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "title": "Test Notification",
+  "body": "This is a test push notification for hosts"
+}
+```
+
+**Response (Success - 200):**
+
+```json
+{
+  "success": true,
+  "message": "Test notification sent successfully",
+  "data": {
+    "sentTo": 2,
+    "devices": [
+      {
+        "platform": "android",
+        "token": "fcm-token-1",
+        "status": "sent"
+      },
+      {
+        "platform": "ios",
+        "token": "fcm-token-2",
+        "status": "sent"
+      }
+    ]
+  }
+}
+```
+
+#### 13.5 Subscribe to Topic
+
+**Request:**
+
+```http
+POST /push-notifications/subscribe-topic
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "topic": "booking_updates"
+}
+```
+
+**Response (Success - 200):**
+
+```json
+{
+  "success": true,
+  "message": "Successfully subscribed to booking_updates topic",
+  "data": {
+    "topic": "booking_updates",
+    "subscribedDevices": 2
+  }
+}
+```
+
+#### 13.6 Unsubscribe from Topic
+
+**Request:**
+
+```http
+POST /push-notifications/unsubscribe-topic
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "topic": "booking_updates"
+}
+```
+
+**Response (Success - 200):**
+
+```json
+{
+  "success": true,
+  "message": "Successfully unsubscribed from booking_updates topic",
+  "data": {
+    "topic": "booking_updates",
+    "unsubscribedDevices": 2
+  }
+}
+```
+
+### 14. File Upload
+
+#### 14.1 Upload Property Images
 
 **Request:**
 
@@ -2399,7 +2550,7 @@ Content-Type: multipart/form-data
 }
 ```
 
-#### 13.2 Upload Profile Avatar
+#### 14.2 Upload Profile Avatar
 
 **Request:**
 
