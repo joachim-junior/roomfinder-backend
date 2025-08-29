@@ -120,7 +120,7 @@ const createBooking = async (req, res) => {
       (checkOutDate - checkInDate) / (1000 * 60 * 60 * 24)
     );
     const totalPrice = property.price * nights;
-
+    const revenueService = require("../utils/revenueService");
     const feeCalculation = await revenueService.calculateBookingFees(
       totalPrice,
       property.currency
