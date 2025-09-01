@@ -60,6 +60,9 @@ router.get("/status", hostApplicationController.getApplicationStatus);
 // Admin routes (require ADMIN role)
 router.use(requireRole(["ADMIN"]));
 
+// Get all host applications (with filtering)
+router.get("/", hostApplicationController.getAllApplications);
+
 // Get all pending applications
 router.get("/pending", hostApplicationController.getPendingApplications);
 

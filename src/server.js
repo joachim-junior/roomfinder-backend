@@ -25,6 +25,7 @@ const blogRoutes = require("./routes/blog"); // Added for blog management
 const helpCenterRoutes = require("./routes/helpCenter"); // Added for help center management
 const coHostRoutes = require("./routes/coHost"); // Added for co-host management
 const fapshiConfigRoutes = require("./routes/fapshiConfig"); // Added for Fapshi configuration management
+const customerSupportRoutes = require("./routes/customerSupport"); // Added for customer support system
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -96,6 +97,7 @@ app.use("/api/v1/blog", blogRoutes); // Added blog routes
 app.use("/api/v1/help-center", helpCenterRoutes); // Added help center routes
 app.use("/api/v1/co-hosts", coHostRoutes); // Added co-host routes
 app.use("/api/v1/fapshi-config", fapshiConfigRoutes); // Added Fapshi configuration routes
+app.use("/api/v1/support", customerSupportRoutes); // Added customer support routes
 
 // Error handling middleware
 app.use((err, req, res, next) => {

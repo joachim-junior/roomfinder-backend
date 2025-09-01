@@ -59,6 +59,55 @@ class HostApplicationController {
     }
   }
 
+  // Admin: Get all host applications with filtering
+  async getAllApplications(req, res) {
+    try {
+      const { page = 1, limit = 10, status, isVerified, search } = req.query;
+      const skip = (page - 1) * limit;
+
+      const where = {
+        role: "HOST",
+      };
+
+      // Filter by approval status
+      if (status) {
+        where.hostApprovalStatus = status;
+      }
+
+      // Filter by verification status
+      if (isVerified !== undefined) {
+        where.isVerified = isVerified === "true";
+      }
+
+      // Search functionality
+      if (search) {
+        where.OR = [
+          { firstName: { contains: search, mode: "insensitive" } },
+          { lastName: { contains: search, mode: "insensitive" } },
+          { email: { contains: search, mode: "insensitive" } },
+        ];
+      }
+
+      const applications = await hostApplicationService.getAllHostApplications(
+        where,
+        page,
+        limit
+      );
+
+      res.json({
+        success: true,
+        message: "Host applications retrieved successfully",
+        data: applications,
+      });
+    } catch (error) {
+      console.error("Get all applications error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to get host applications",
+      });
+    }
+  }
+
   // Admin: Get all pending applications
   async getPendingApplications(req, res) {
     try {

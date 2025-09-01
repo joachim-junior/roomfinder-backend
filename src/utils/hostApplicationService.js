@@ -107,6 +107,62 @@ class HostApplicationService {
     }
   }
 
+  // Admin: Get all host applications with filtering
+  async getAllHostApplications(where, page = 1, limit = 10) {
+    try {
+      const skip = (page - 1) * limit;
+
+      const [applications, total] = await Promise.all([
+        prisma.user.findMany({
+          where,
+          skip,
+          take: limit,
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            phone: true,
+            role: true,
+            isVerified: true,
+            hostApprovalStatus: true,
+            hostApplicationDate: true,
+            hostApplicationNotes: true,
+            hostApprovalDate: true,
+            hostApprovalNotes: true,
+            hostRejectionReason: true,
+            createdAt: true,
+            updatedAt: true,
+            _count: {
+              properties: true,
+              bookings: true,
+            },
+          },
+          orderBy: { hostApplicationDate: "desc" },
+        }),
+        prisma.user.count({ where }),
+      ]);
+
+      const totalPages = Math.ceil(total / limit);
+      const hasNext = page < totalPages;
+      const hasPrev = page > 1;
+
+      return {
+        applications,
+        pagination: {
+          currentPage: page,
+          totalPages,
+          totalItems: total,
+          itemsPerPage: limit,
+          hasNextPage: hasNext,
+          hasPrevPage: hasPrev,
+        },
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
   // Admin: Get all pending host applications
   async getPendingHostApplications(page = 1, limit = 10) {
     try {

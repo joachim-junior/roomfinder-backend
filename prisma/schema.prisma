@@ -58,6 +58,9 @@ model User {
   helpCenterArticles       HelpCenter[] @relation("HelpAuthor")
   coHostProperties         CoHost[] @relation("CoHostProperties") // Properties where user is co-host
   coHostInvitations        CoHost[] @relation("CoHostInvitations") // Invitations sent by user
+  supportTickets           CustomerSupport[] @relation("UserSupportTickets") // Tickets created by user
+  assignedTickets          CustomerSupport[] @relation("AdminSupportTickets") // Tickets assigned to user
+  supportMessages          SupportMessage[] @relation("SupportMessageSender") // Messages sent by user
 
   @@map("users")
 }
@@ -112,6 +115,7 @@ model Booking {
   paymentStatus PaymentStatus @default(PENDING)
   transactionId String?
   statusReason String?
+  metadata    String?  // JSON data for additional info (preserving existing data)
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -588,4 +592,83 @@ enum PaymentStatus {
   EXPIRED
   SUCCESSFUL
   PAID
+}
+
+model CustomerSupport {
+  id          String   @id @default(cuid())
+  ticketId    String   @unique @default(cuid())
+  subject     String
+  description String
+  category    SupportCategory
+  priority    SupportPriority @default(MEDIUM)
+  status      SupportStatus   @default(OPEN)
+  
+  // User who created the ticket
+  userId      String
+  user        User     @relation("UserSupportTickets", fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Admin who handles the ticket
+  assignedToId String?
+  assignedTo   User?   @relation("AdminSupportTickets", fields: [assignedToId], references: [id])
+  
+  // Metadata
+  userEmail   String
+  userPhone   String?
+  attachments String[] // Array of file URLs
+  
+  // Resolution
+  resolution  String?
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  
+  // Timestamps
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  messages    SupportMessage[]
+
+  @@map("customer_support")
+}
+
+model SupportMessage {
+  id        String   @id @default(cuid())
+  ticketId  String
+  ticket    CustomerSupport @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  
+  senderId  String
+  sender    User     @relation("SupportMessageSender", fields: [senderId], references: [id])
+  
+  message   String
+  isInternal Boolean @default(false) // Internal admin notes
+  attachments String[] // Array of file URLs
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("support_messages")
+}
+
+enum SupportCategory {
+  BOOKING_ISSUES
+  PAYMENTS_BILLING
+  ACCOUNT_MANAGEMENT
+  TECHNICAL_SUPPORT
+  SAFETY_SECURITY
+}
+
+enum SupportPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum SupportStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_USER
+  RESOLVED
+  CLOSED
+  ESCALATED
 }
