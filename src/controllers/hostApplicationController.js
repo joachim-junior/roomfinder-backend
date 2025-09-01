@@ -62,7 +62,25 @@ class HostApplicationController {
   // Admin: Get all host applications with filtering
   async getAllApplications(req, res) {
     try {
-      const { page = 1, limit = 10, status, isVerified, search } = req.query;
+      const page = parseInt(req.query.page) || 1;
+      const limit = parseInt(req.query.limit) || 10;
+
+      // Validate pagination parameters
+      if (page < 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Page number must be greater than 0",
+        });
+      }
+
+      if (limit < 1 || limit > 100) {
+        return res.status(400).json({
+          success: false,
+          message: "Limit must be between 1 and 100",
+        });
+      }
+
+      const { status, isVerified, search } = req.query;
       const skip = (page - 1) * limit;
 
       const where = {
@@ -113,6 +131,21 @@ class HostApplicationController {
     try {
       const page = parseInt(req.query.page) || 1;
       const limit = parseInt(req.query.limit) || 10;
+
+      // Validate pagination parameters
+      if (page < 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Page number must be greater than 0",
+        });
+      }
+
+      if (limit < 1 || limit > 100) {
+        return res.status(400).json({
+          success: false,
+          message: "Limit must be between 1 and 100",
+        });
+      }
 
       const result = await hostApplicationService.getPendingHostApplications(
         page,

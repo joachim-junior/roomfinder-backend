@@ -6,19 +6,20 @@
 2. [Admin Settings](#admin-settings)
 3. [User Management](#user-management)
 4. [Property Management](#property-management)
-5. [Booking Management](#booking-management)
-6. [Host Approval System](#host-approval-system)
-7. [Platform Analytics](#platform-analytics)
-8. [Revenue Management](#revenue-management)
-9. [Blog Management](#blog-management)
-10. [Help Center Management](#help-center-management)
-11. [Co-Host Management](#co-host-management)
-12. [Favorites Management](#favorites-management)
-13. [Enquiry Management](#enquiry-management)
-14. [System Administration](#system-administration)
-15. [Fapshi Payment Configuration](#fapshi-payment-configuration)
-16. [Notifications Management](#notifications-management)
-17. [**Booking Process Flow (Admin Perspective)**](#booking-process-flow-admin-perspective)
+5. [Admin Property Creation on Behalf of Hosts](#admin-property-creation-on-behalf-of-hosts)
+6. [Booking Management](#booking-management)
+7. [Host Approval System](#host-approval-system)
+8. [Platform Analytics](#platform-analytics)
+9. [Revenue Management](#revenue-management)
+10. [Blog Management](#blog-management)
+11. [Help Center Management](#help-center-management)
+12. [Co-Host Management](#co-host-management)
+13. [Favorites Management](#favorites-management)
+14. [Enquiry Management](#enquiry-management)
+15. [System Administration](#system-administration)
+16. [Fapshi Payment Configuration](#fapshi-payment-configuration)
+17. [Notifications Management](#notifications-management)
+18. [**Booking Process Flow (Admin Perspective)**](#booking-process-flow-admin-perspective)
 
 ## Base URL
 
@@ -897,6 +898,336 @@ Authorization: Bearer <token>
   "message": "Property deleted successfully"
 }
 ```
+
+### 4. Admin Property Creation on Behalf of Hosts
+
+**Summary:**
+Admins can create properties on behalf of approved hosts using the same endpoint as regular property creation (`POST /api/v1/properties`) but with an additional `hostId` field. This feature provides administrative control over property creation while maintaining proper host association and validation.
+
+**Key Features:**
+
+- ✅ Create properties for approved hosts
+- ✅ Automatic property verification
+- ✅ Host validation and approval checks
+- ✅ Quality control and standardization
+- ✅ Full audit trail
+
+**Use Cases:**
+
+- Assisting hosts who have difficulty with the platform
+- Creating properties for hosts who prefer admin assistance
+- Ensuring property quality and compliance
+- Onboarding new hosts with sample properties
+
+#### 4.1 Create Property on Behalf of Host
+
+**Endpoint:** `POST /api/v1/properties`
+
+**Request:**
+
+```http
+POST /api/v1/properties
+Authorization: Bearer <admin_token>
+Content-Type: application/json
+
+{
+  "title": "Luxury Beachfront Villa",
+  "description": "Stunning 4-bedroom villa with panoramic ocean views, private pool, and modern amenities. Perfect for families and groups seeking luxury accommodation.",
+  "type": "VILLA",
+  "address": "456 Ocean Drive",
+  "city": "Limbe",
+  "state": "Southwest",
+  "country": "Cameroon",
+  "zipCode": "54321",
+  "latitude": 4.0511,
+  "longitude": 9.7679,
+  "price": 120000,
+  "currency": "XAF",
+  "bedrooms": 4,
+  "bathrooms": 3,
+  "maxGuests": 8,
+  "amenities": [
+    "WiFi",
+    "Air Conditioning",
+    "Swimming Pool",
+    "Kitchen",
+    "Free Parking",
+    "Ocean View",
+    "Private Beach Access",
+    "Security System"
+  ],
+  "images": [
+    "villa-exterior.jpg",
+    "villa-living-room.jpg",
+    "villa-bedroom.jpg",
+    "villa-pool.jpg"
+  ],
+  "hostId": "cme6fo5xz0000u9mo5li7lln7"
+}
+```
+
+**Request Body Fields:**
+
+| Field         | Type   | Required | Description                                                                          |
+| ------------- | ------ | -------- | ------------------------------------------------------------------------------------ |
+| `title`       | string | ✅       | Property title (5-100 characters)                                                    |
+| `description` | string | ✅       | Property description (10-1000 characters)                                            |
+| `type`        | string | ✅       | Property type (ROOM, STUDIO, APARTMENT, VILLA, SUITE, DORMITORY, COTTAGE, PENTHOUSE) |
+| `address`     | string | ✅       | Street address (5-200 characters)                                                    |
+| `city`        | string | ✅       | City name (2-50 characters)                                                          |
+| `state`       | string | ✅       | State/province (2-50 characters)                                                     |
+| `country`     | string | ✅       | Country name (2-50 characters)                                                       |
+| `zipCode`     | string | ❌       | Postal/ZIP code                                                                      |
+| `latitude`    | number | ❌       | GPS latitude coordinate                                                              |
+| `longitude`   | number | ❌       | GPS longitude coordinate                                                             |
+| `price`       | number | ✅       | Nightly price (must be > 0)                                                          |
+| `currency`    | string | ❌       | Currency code (default: XAF)                                                         |
+| `bedrooms`    | number | ✅       | Number of bedrooms (1-20)                                                            |
+| `bathrooms`   | number | ✅       | Number of bathrooms (1-10)                                                           |
+| `maxGuests`   | number | ✅       | Maximum number of guests (1-50)                                                      |
+| `amenities`   | array  | ❌       | Array of amenity strings                                                             |
+| `images`      | array  | ❌       | Array of image URLs/filenames                                                        |
+| `hostId`      | string | ✅       | ID of the host on whose behalf the property is created                               |
+
+**Response (Success - 201):**
+
+```json
+{
+  "message": "Property created successfully on behalf of John Host",
+  "property": {
+    "id": "cme93hkcn0001u95gg0z35tq1",
+    "title": "Luxury Beachfront Villa",
+    "description": "Stunning 4-bedroom villa with panoramic ocean views, private pool, and modern amenities. Perfect for families and groups seeking luxury accommodation.",
+    "type": "VILLA",
+    "address": "456 Ocean Drive",
+    "city": "Limbe",
+    "state": "Southwest",
+    "country": "Cameroon",
+    "zipCode": "54321",
+    "latitude": 4.0511,
+    "longitude": 9.7679,
+    "price": 120000,
+    "currency": "XAF",
+    "bedrooms": 4,
+    "bathrooms": 3,
+    "maxGuests": 8,
+    "amenities": [
+      "WiFi",
+      "Air Conditioning",
+      "Swimming Pool",
+      "Kitchen",
+      "Free Parking",
+      "Ocean View",
+      "Private Beach Access",
+      "Security System"
+    ],
+    "images": [
+      "villa-exterior.jpg",
+      "villa-living-room.jpg",
+      "villa-bedroom.jpg",
+      "villa-pool.jpg"
+    ],
+    "isAvailable": true,
+    "isVerified": true,
+    "createdAt": "2025-08-12T22:10:16.775Z",
+    "updatedAt": "2025-08-12T22:10:16.775Z",
+    "hostId": "cme6fo5xz0000u9mo5li7lln7",
+    "host": {
+      "id": "cme6fo5xz0000u9mo5li7lln7",
+      "firstName": "John",
+      "lastName": "Host",
+      "email": "host@example.com",
+      "phone": "+237612345678",
+      "avatar": null,
+      "isVerified": true,
+      "hostApprovalStatus": "APPROVED"
+    }
+  },
+  "createdBy": "ADMIN"
+}
+```
+
+**Error Responses:**
+
+**Host Not Found (404):**
+
+```json
+{
+  "error": "Host not found",
+  "message": "The specified host does not exist"
+}
+```
+
+**Invalid Host (400):**
+
+```json
+{
+  "error": "Invalid host",
+  "message": "The specified user is not a host"
+}
+```
+
+**Host Not Approved (400):**
+
+```json
+{
+  "error": "Host not approved",
+  "message": "The specified host is not approved to create properties"
+}
+```
+
+**Missing Required Fields (400):**
+
+```json
+{
+  "error": "Missing required fields",
+  "message": "Title, description, address, city, state, and country are required"
+}
+```
+
+**Invalid Price (400):**
+
+```json
+{
+  "error": "Invalid price",
+  "message": "Price must be greater than 0"
+}
+```
+
+**Invalid Room Count (400):**
+
+```json
+{
+  "error": "Invalid room count",
+  "message": "Bedrooms and bathrooms must be greater than 0"
+}
+```
+
+#### 4.2 Property Type Options
+
+**Available Property Types:**
+
+- `ROOM` - Single room accommodation
+- `STUDIO` - Open-plan living space
+- `APARTMENT` - Self-contained apartment unit
+- `VILLA` - Standalone house/villa
+- `SUITE` - Luxury suite accommodation
+- `DORMITORY` - Shared accommodation
+- `COTTAGE` - Small house, typically rural
+- `PENTHOUSE` - Top-floor luxury apartment
+
+#### 4.3 Admin Property Creation Benefits
+
+**Automatic Verification:**
+
+- Properties created by admins are automatically marked as verified
+- No additional verification process required
+- Immediate availability for booking
+
+**Host Validation:**
+
+- System automatically validates that the specified host exists
+- Ensures host has APPROVED status
+- Prevents creation for unapproved or suspended hosts
+
+**Quality Control:**
+
+- Admins can ensure property descriptions meet platform standards
+- Consistent formatting and information structure
+- Professional presentation for guests
+
+#### 4.4 Example Use Cases
+
+**1. New Host Onboarding:**
+
+```json
+{
+  "title": "Welcome to Room Finder - Sample Property",
+  "description": "This is a sample property to help you get started. You can edit or delete this property and create your own listings.",
+  "type": "APARTMENT",
+  "address": "123 Sample Street",
+  "city": "Douala",
+  "state": "Littoral",
+  "country": "Cameroon",
+  "price": 25000,
+  "bedrooms": 1,
+  "bathrooms": 1,
+  "maxGuests": 2,
+  "amenities": ["WiFi", "Kitchen", "Basic Amenities"],
+  "hostId": "new-host-id"
+}
+```
+
+**2. Premium Property Creation:**
+
+```json
+{
+  "title": "Executive Business Suite",
+  "description": "Luxury business accommodation with conference facilities, high-speed internet, and premium amenities for corporate travelers.",
+  "type": "SUITE",
+  "address": "789 Business District",
+  "city": "Yaoundé",
+  "state": "Centre",
+  "country": "Cameroon",
+  "price": 150000,
+  "bedrooms": 2,
+  "bathrooms": 2,
+  "maxGuests": 4,
+  "amenities": [
+    "WiFi",
+    "Conference Room",
+    "Business Center",
+    "Premium Bedding",
+    "24/7 Concierge"
+  ],
+  "hostId": "premium-host-id"
+}
+```
+
+#### 4.5 Admin Property Management Workflow
+
+**Step 1: Verify Host Status**
+
+- Ensure host exists and has APPROVED status
+- Check host verification and approval history
+
+**Step 2: Create Property**
+
+- Use the property creation endpoint with `hostId`
+- Include all required property details
+- Set appropriate amenities and pricing
+
+**Step 3: Property Verification**
+
+- Property is automatically verified (no manual verification needed)
+- Property becomes immediately available for booking
+
+**Step 4: Host Notification**
+
+- Host receives notification of property creation
+- Host can manage and update the property as needed
+
+#### 4.6 Security and Validation
+
+**Admin-Only Access:**
+
+- Only users with ADMIN role can create properties on behalf of hosts
+- Requires valid JWT token with admin privileges
+
+**Host Validation:**
+
+- System validates host existence and approval status
+- Prevents creation for invalid or unapproved hosts
+
+**Data Validation:**
+
+- All property fields are validated according to platform standards
+- Ensures data quality and consistency
+
+**Audit Trail:**
+
+- All admin-created properties are marked with `createdBy: "ADMIN"`
+- Full audit trail maintained for compliance
 
 ### 4. Booking Management
 
