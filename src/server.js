@@ -41,6 +41,18 @@ app.use(morgan("combined")); // Logging
 app.use(express.json({ limit: "10mb" })); // Parse JSON bodies with 10MB limit
 app.use(express.urlencoded({ limit: "10mb", extended: true })); // Parse URL-encoded bodies with 10MB limit
 
+// Skip body parsing for multipart form data to avoid conflicts with Multer
+app.use((req, res, next) => {
+  if (
+    req.headers["content-type"] &&
+    req.headers["content-type"].includes("multipart/form-data")
+  ) {
+    // Skip body parsing for multipart form data
+    return next();
+  }
+  next();
+});
+
 // Basic route
 app.get("/", (req, res) => {
   res.json({
@@ -115,6 +127,18 @@ app.use("/api/v1/support", customerSupportRoutes); // Added customer support rou
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
+
+  // Handle JSON parsing errors
+  if (err instanceof SyntaxError && err.status === 400 && "body" in err) {
+    return res.status(400).json({
+      error: "Invalid JSON",
+      message: "The request body contains invalid JSON format",
+      details: {
+        error: err.message,
+        suggestion: "Please check your request body format",
+      },
+    });
+  }
 
   // Handle payload too large errors specifically
   if (
