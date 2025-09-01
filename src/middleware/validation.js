@@ -36,7 +36,8 @@ const validateRegistration = [
     .withMessage("Last name must be between 2 and 50 characters"),
   body("phone")
     .optional()
-    .isMobilePhone()
+    .if(body("phone").notEmpty())
+    .isMobilePhone("any")
     .withMessage("Please provide a valid phone number"),
   handleValidationErrors,
 ];
