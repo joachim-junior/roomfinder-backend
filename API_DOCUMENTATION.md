@@ -714,6 +714,8 @@ GET /properties/:id
 
 #### 3.4 Create Property (Host Only)
 
+**Important Note:** Property images must be uploaded separately before property creation. See [Property Image Handling Documentation](./PROPERTY_IMAGE_HANDLING.md) for complete details.
+
 **Request:**
 
 ```http
@@ -738,9 +740,19 @@ Content-Type: application/json
   "bathrooms": 1,
   "maxGuests": 2,
   "amenities": ["WiFi", "AC", "Kitchen"],
-  "images": ["image1.jpg", "image2.jpg"]
+  "images": [
+    "http://localhost:5000/uploads/properties/temp-123/image1-1735729943123-123456789.jpg",
+    "http://localhost:5000/uploads/properties/temp-123/image2-1735729943123-987654321.jpg"
+  ]
 }
 ```
+
+**Image Handling:**
+
+- **Step 1:** Upload images using `/api/v1/uploads/multiple` endpoint
+- **Step 2:** Use returned image URLs in the `images` array
+- **Images Field:** Array of image URLs (strings), not file uploads
+- **Maximum:** Up to 10 images per property
 
 **Response (Success - 201):**
 

@@ -986,8 +986,15 @@ Content-Type: application/json
 | `bathrooms`   | number | ✅       | Number of bathrooms (1-10)                                                           |
 | `maxGuests`   | number | ✅       | Maximum number of guests (1-50)                                                      |
 | `amenities`   | array  | ❌       | Array of amenity strings                                                             |
-| `images`      | array  | ❌       | Array of image URLs/filenames                                                        |
+| `images`      | array  | ❌       | Array of image URLs (must be uploaded separately first)                              |
 | `hostId`      | string | ✅       | ID of the host on whose behalf the property is created                               |
+
+**Image Handling:**
+
+- **Step 1:** Upload images using `/api/v1/uploads/multiple` endpoint
+- **Step 2:** Use returned image URLs in the `images` array
+- **Images Field:** Array of image URLs (strings), not file uploads
+- **Maximum:** Up to 10 images per property
 
 **Response (Success - 201):**
 
