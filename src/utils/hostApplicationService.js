@@ -133,22 +133,54 @@ class HostApplicationService {
             hostRejectionReason: true,
             createdAt: true,
             updatedAt: true,
-            _count: {
-              properties: true,
-              bookings: true,
-            },
           },
           orderBy: { hostApplicationDate: "desc" },
         }),
         prisma.user.count({ where }),
       ]);
 
+      // Get counts for properties and bookings for all users in one query
+      const userIds = applications.map((user) => user.id);
+
+      const [propertiesCounts, bookingsCounts] = await Promise.all([
+        prisma.property.groupBy({
+          by: ["hostId"],
+          where: { hostId: { in: userIds } },
+          _count: { hostId: true },
+        }),
+        prisma.booking.groupBy({
+          by: ["guestId"],
+          where: { guestId: { in: userIds } },
+          _count: { guestId: true },
+        }),
+      ]);
+
+      // Create lookup maps for efficient access
+      const propertiesCountMap = propertiesCounts.reduce((acc, item) => {
+        acc[item.hostId] = item._count.hostId;
+        return acc;
+      }, {});
+
+      const bookingsCountMap = bookingsCounts.reduce((acc, item) => {
+        acc[item.guestId] = item._count.guestId;
+        return acc;
+      }, {});
+
+      // Add counts to applications
+      const applicationsWithCounts = applications.map((user) => ({
+        ...user,
+        _count: {
+          properties: propertiesCountMap[user.id] || 0,
+          bookings: bookingsCountMap[user.id] || 0,
+        },
+      }));
+
       const totalPages = Math.ceil(total / limit);
       const hasNext = page < totalPages;
       const hasPrev = page > 1;
 
       return {
-        applications,
+        applications: applicationsWithCounts,
         pagination: {
           currentPage: page,
           totalPages,
