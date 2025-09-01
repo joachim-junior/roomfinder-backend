@@ -8,6 +8,12 @@ const path = require("path");
  */
 const uploadSingleImage = async (req, res) => {
   try {
+    // Update base URL based on request for dynamic URL generation
+    const protocol = req.protocol;
+    const host = req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+    railwayStorage.updateBaseUrl(baseUrl);
+
     if (!req.file) {
       return res.status(400).json({
         error: "No file uploaded",
@@ -61,6 +67,12 @@ const uploadSingleImage = async (req, res) => {
  */
 const uploadMultipleImages = async (req, res) => {
   try {
+    // Update base URL based on request for dynamic URL generation
+    const protocol = req.protocol;
+    const host = req.get("host");
+    const baseUrl = `${protocol}://${host}`;
+    railwayStorage.updateBaseUrl(baseUrl);
+
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({
         error: "No files uploaded",

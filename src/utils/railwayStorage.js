@@ -7,6 +7,41 @@ class RailwayStorageService {
     this.baseUrl =
       process.env.RAILWAY_STORAGE_URL || "https://storage.railway.app";
     this.apiKey = process.env.RAILWAY_STORAGE_API_KEY;
+
+    // Auto-detect base URL for production
+    this.detectBaseUrl();
+  }
+
+  /**
+   * Auto-detect the base URL based on environment
+   */
+  detectBaseUrl() {
+    if (process.env.BASE_URL) {
+      this.baseUrl = process.env.BASE_URL;
+    } else if (process.env.NODE_ENV === "production") {
+      // In production, try to use the request host or default to a production domain
+      this.baseUrl =
+        process.env.PRODUCTION_URL || "https://your-production-domain.com";
+    } else {
+      // Development fallback
+      this.baseUrl = "http://localhost:5000";
+    }
+  }
+
+  /**
+   * Update base URL dynamically (useful for request-based URL generation)
+   * @param {string} baseUrl - New base URL
+   */
+  updateBaseUrl(baseUrl) {
+    this.baseUrl = baseUrl;
+  }
+
+  /**
+   * Get base URL with fallback
+   * @returns {string} - Current base URL
+   */
+  getBaseUrl() {
+    return this.baseUrl;
   }
 
   /**
@@ -37,9 +72,7 @@ class RailwayStorageService {
       fs.copyFileSync(filePath, storagePath);
 
       // Return public URL (in production, this would be Railway Storage URL)
-      const publicUrl = `${
-        process.env.BASE_URL || "http://localhost:5000"
-      }/uploads/${folder}/${fileName}`;
+      const publicUrl = `${this.baseUrl}/uploads/${folder}/${fileName}`;
 
       return publicUrl;
     } catch (error) {
@@ -90,9 +123,7 @@ class RailwayStorageService {
       fs.writeFileSync(processedFilePath, processedImageBuffer);
 
       // Return public URL
-      const publicUrl = `${
-        process.env.BASE_URL || "http://localhost:5000"
-      }/uploads/${folder}/${fileName}`;
+      const publicUrl = `${this.baseUrl}/uploads/${folder}/${fileName}`;
 
       return publicUrl;
     } catch (error) {
@@ -159,9 +190,7 @@ class RailwayStorageService {
       }
 
       const stats = fs.statSync(filePath);
-      const publicUrl = `${
-        process.env.BASE_URL || "http://localhost:5000"
-      }/uploads/${folder}/${fileName}`;
+      const publicUrl = `${this.baseUrl}/uploads/${folder}/${fileName}`;
 
       return {
         fileName,
