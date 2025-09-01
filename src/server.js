@@ -38,20 +38,7 @@ app.use(morgan("combined")); // Logging
 // Configure body parser with larger limits for file uploads
 // Note: These limits are for JSON/URL-encoded data, not file uploads
 // File uploads are handled by Multer middleware with their own limits
-app.use(express.json({ limit: "10mb" })); // Parse JSON bodies with 10MB limit
-app.use(express.urlencoded({ limit: "10mb", extended: true })); // Parse URL-encoded bodies with 10MB limit
-
-// Skip body parsing for multipart form data to avoid conflicts with Multer
-app.use((req, res, next) => {
-  if (
-    req.headers["content-type"] &&
-    req.headers["content-type"].includes("multipart/form-data")
-  ) {
-    // Skip body parsing for multipart form data
-    return next();
-  }
-  next();
-});
+// We'll apply body parsing only to non-upload routes to avoid conflicts
 
 // Basic route
 app.get("/", (req, res) => {
@@ -94,12 +81,7 @@ app.get("/health/db", async (req, res) => {
 app.use("/uploads", express.static("uploads"));
 
 // API Routes
-app.use("/api/v1/auth", authRoutes);
-app.use("/api/v1/users", userRoutes);
-app.use("/api/v1/properties", propertyRoutes);
-app.use("/api/v1/bookings", bookingRoutes);
-app.use("/api/v1/reviews", reviewRoutes);
-// Upload routes with specific configuration for large files
+// Upload routes with specific configuration for large files (NO body parser)
 app.use(
   "/api/v1/uploads",
   (req, res, next) => {
@@ -109,20 +91,122 @@ app.use(
   },
   uploadRoutes
 );
-app.use("/api/v1/notifications", notificationRoutes);
-app.use("/api/v1/push-notifications", pushNotificationRoutes);
-app.use("/api/v1/admin", adminRoutes);
-app.use("/api/v1/payments", paymentRoutes);
-app.use("/api/v1/wallet", walletRoutes);
-app.use("/api/v1/favorites", favoritesRoutes);
-app.use("/api/v1/host-applications", hostApplicationRoutes);
-app.use("/api/v1/revenue", revenueRoutes); // Added revenue routes
-app.use("/api/v1/enquiries", enquiryRoutes); // Added enquiry routes
-app.use("/api/v1/blog", blogRoutes); // Added blog routes
-app.use("/api/v1/help-center", helpCenterRoutes); // Added help center routes
-app.use("/api/v1/co-hosts", coHostRoutes); // Added co-host routes
-app.use("/api/v1/fapshi-config", fapshiConfigRoutes); // Added Fapshi configuration routes
-app.use("/api/v1/support", customerSupportRoutes); // Added customer support routes
+
+// All other routes with body parser middleware
+app.use(
+  "/api/v1/auth",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  authRoutes
+);
+app.use(
+  "/api/v1/users",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  userRoutes
+);
+app.use(
+  "/api/v1/properties",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  propertyRoutes
+);
+app.use(
+  "/api/v1/bookings",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  bookingRoutes
+);
+app.use(
+  "/api/v1/reviews",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  reviewRoutes
+);
+app.use(
+  "/api/v1/notifications",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  notificationRoutes
+);
+app.use(
+  "/api/v1/push-notifications",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  pushNotificationRoutes
+);
+app.use(
+  "/api/v1/admin",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  adminRoutes
+);
+app.use(
+  "/api/v1/payments",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  paymentRoutes
+);
+app.use(
+  "/api/v1/wallet",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  walletRoutes
+);
+app.use(
+  "/api/v1/favorites",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  favoritesRoutes
+);
+app.use(
+  "/api/v1/host-applications",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  hostApplicationRoutes
+);
+app.use(
+  "/api/v1/revenue",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  revenueRoutes
+); // Added revenue routes
+app.use(
+  "/api/v1/enquiries",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  enquiryRoutes
+); // Added enquiry routes
+app.use(
+  "/api/v1/blog",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  blogRoutes
+); // Added blog routes
+app.use(
+  "/api/v1/help-center",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  helpCenterRoutes
+); // Added help center routes
+app.use(
+  "/api/v1/co-hosts",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  coHostRoutes
+); // Added co-host routes
+app.use(
+  "/api/v1/fapshi-config",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  fapshiConfigRoutes
+); // Added Fapshi configuration routes
+app.use(
+  "/api/v1/support",
+  express.json({ limit: "10mb" }),
+  express.urlencoded({ limit: "10mb", extended: true }),
+  customerSupportRoutes
+); // Added customer support routes
 
 // Error handling middleware
 app.use((err, req, res, next) => {
