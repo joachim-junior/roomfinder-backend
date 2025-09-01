@@ -420,9 +420,60 @@ const updateProperty = async (req, res) => {
     if (updateData.maxGuests)
       updateData.maxGuests = parseInt(updateData.maxGuests);
 
+    // Filter out invalid fields that don't exist in the Property model
+    const validPropertyFields = [
+      "title",
+      "description",
+      "type",
+      "address",
+      "city",
+      "state",
+      "country",
+      "zipCode",
+      "latitude",
+      "longitude",
+      "price",
+      "currency",
+      "bedrooms",
+      "bathrooms",
+      "maxGuests",
+      "amenities",
+      "images",
+      "isAvailable",
+      "isVerified",
+    ];
+
+    const filteredUpdateData = {};
+    const invalidFields = [];
+    Object.keys(updateData).forEach((key) => {
+      if (validPropertyFields.includes(key)) {
+        filteredUpdateData[key] = updateData[key];
+      } else {
+        invalidFields.push(key);
+      }
+    });
+
+    // Log invalid fields for debugging
+    if (invalidFields.length > 0) {
+      console.log(
+        `Invalid fields in property update: ${invalidFields.join(", ")}`
+      );
+    }
+
+    // Check if there are any valid fields to update
+    if (Object.keys(filteredUpdateData).length === 0) {
+      return res.status(400).json({
+        error: "No valid fields to update",
+        message:
+          "All provided fields are invalid or not allowed for property updates",
+        invalidFields: invalidFields,
+        validFields: validPropertyFields,
+      });
+    }
+
     const updatedProperty = await prisma.property.update({
       where: { id },
-      data: updateData,
+      data: filteredUpdateData,
       include: {
         host: {
           select: {
