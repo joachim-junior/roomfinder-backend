@@ -204,8 +204,8 @@ const validateBooking = [
     .withMessage("Special requests must be less than 500 characters"),
   body("paymentMethod")
     .optional()
-    .isIn(["MOBILE_MONEY", "CARD", "CASH"])
-    .withMessage("Payment method must be MOBILE_MONEY, CARD, or CASH"),
+    .isIn(["MOBILE_MONEY", "ORANGE_MONEY"])
+    .withMessage("Payment method must be MOBILE_MONEY or ORANGE_MONEY"),
   handleValidationErrors,
 ];
 

@@ -52,6 +52,7 @@ Authorization: Bearer <your-jwt-token>
 | GET    | `/properties/host/stats`              | Get host property stats         | Yes (Host)       |
 | POST   | `/bookings`                           | Create booking                  | Yes              |
 | GET    | `/bookings/my-bookings`               | Get user bookings               | Yes              |
+| GET    | `/bookings/has-booked/:propertyId`     | Check if user booked property      | Yes              |
 | GET    | `/bookings/:id`                       | Get booking by ID               | Yes              |
 | PUT    | `/bookings/:id/cancel`                | Cancel booking                  | Yes              |
 | GET    | `/bookings/availability`              | Check availability              | Yes              |
@@ -3715,3 +3716,71 @@ This guide helps property owners understand how to use the Room Finder platform 
 - Engage with the community
 
 This comprehensive guide ensures property owners can successfully use the Room Finder platform to maximize their rental income while providing excellent guest experiences.
+
+#### 4.5 Check if User Has Booked a Property
+
+```http
+GET /bookings/has-booked/:propertyId?status=CONFIRMED&includeHistory=true
+Authorization: Bearer <token>
+```
+
+**Description:** Check if the authenticated user has booked a specific property.
+
+**Path Parameters:**
+- `propertyId` (required): The ID of the property to check
+
+**Query Parameters:**
+- `status` (optional): Filter by booking status (PENDING, CONFIRMED, CANCELLED, COMPLETED)
+- `includeHistory` (optional): Include all booking history for this property (true/false)
+
+**Response (Success - 200):**
+```json
+{
+  "success": true,
+  "data": {
+    "hasBooked": true,
+    "property": {
+      "id": "prop123",
+      "title": "Beautiful Apartment in Douala"
+    },
+    "latestBooking": {
+      "id": "booking123",
+      "status": "CONFIRMED",
+      "checkIn": "2025-09-15T00:00:00.000Z",
+      "checkOut": "2025-09-20T00:00:00.000Z",
+      "totalPrice": 250000,
+      "createdAt": "2025-08-08T16:15:01.213Z"
+    }
+  }
+}
+```
+
+**Response (Not Booked - 200):**
+```json
+{
+  "success": true,
+  "data": {
+    "hasBooked": false,
+    "property": {
+      "id": "prop123",
+      "title": "Beautiful Apartment in Douala"
+    },
+    "latestBooking": null
+  }
+}
+```
+
+**Response (Error - 404):**
+```json
+{
+  "success": false,
+  "message": "Property not found"
+}
+```
+
+**Use Cases:**
+- Check if user can leave a review (only users who have booked can review)
+- Display "Book Again" button for previously booked properties
+- Validate user permissions for property-related actions
+- Show booking history for a specific property
+

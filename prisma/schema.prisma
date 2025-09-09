@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,59 +8,54 @@ datasource db {
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  firstName String
-  lastName  String
-  phone     String?
-  role      UserRole @default(GUEST)
-  isVerified Boolean @default(false)
-  avatar    String?
-  emailVerificationToken String?
+  id                       String                       @id @default(cuid())
+  email                    String                       @unique
+  password                 String
+  firstName                String
+  lastName                 String
+  phone                    String?
+  role                     UserRole                     @default(GUEST)
+  isVerified               Boolean                      @default(false)
+  avatar                   String?
+  emailVerificationToken   String?
   emailVerificationExpires DateTime?
-  passwordResetToken String?
-  passwordResetExpires DateTime?
-  
-  // Host approval fields
-  hostApprovalStatus HostApprovalStatus?
-  hostApprovalDate   DateTime?
-  hostApprovalNotes  String?
-  hostRejectionReason String?
-  hostApplicationDate DateTime?
-  hostApplicationNotes String?
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  properties Property[] @relation("HostProperties")
-  bookings   Booking[]  @relation("GuestBookings")
-  reviews    Review[]   @relation("UserReviews")
-  sentMessages             Message[] @relation("SentMessages")
-  receivedMessages         Message[] @relation("ReceivedMessages")
-  notifications            Notification[]
-  notificationPreferences  UserNotificationPreferences?
+  passwordResetToken       String?
+  passwordResetExpires     DateTime?
+  hostApprovalStatus       HostApprovalStatus?
+  hostApprovalDate         DateTime?
+  hostApprovalNotes        String?
+  hostRejectionReason      String?
+  hostApplicationDate      DateTime?
+  hostApplicationNotes     String?
+  createdAt                DateTime                     @default(now())
+  updatedAt                DateTime                     @updatedAt
+  blogComments             BlogComment[]                @relation("BlogCommentAuthor")
+  blogs                    Blog[]                       @relation("BlogAuthor")
+  bookings                 Booking[]                    @relation("GuestBookings")
+  coHostInvitations        CoHost[]                     @relation("CoHostInvitations")
+  coHostProperties         CoHost[]                     @relation("CoHostProperties")
+  assignedTickets          CustomerSupport[]            @relation("AdminSupportTickets")
+  supportTickets           CustomerSupport[]            @relation("UserSupportTickets")
   deviceTokens             DeviceToken[]
-  wallet                   Wallet?
-  transactions             Transaction[]
   favorites                Favorite[]
-  propertyEnquiries        PropertyEnquiry[] @relation("HostEnquiries")
-  guestPropertyEnquiries   PropertyEnquiry[] @relation("GuestEnquiries")
-  blogs                    Blog[] @relation("BlogAuthor")
-  blogComments             BlogComment[] @relation("BlogCommentAuthor")
-  helpCenterArticles       HelpCenter[] @relation("HelpAuthor")
-  coHostProperties         CoHost[] @relation("CoHostProperties") // Properties where user is co-host
-  coHostInvitations        CoHost[] @relation("CoHostInvitations") // Invitations sent by user
-  supportTickets           CustomerSupport[] @relation("UserSupportTickets") // Tickets created by user
-  assignedTickets          CustomerSupport[] @relation("AdminSupportTickets") // Tickets assigned to user
-  supportMessages          SupportMessage[] @relation("SupportMessageSender") // Messages sent by user
+  helpCenterArticles       HelpCenter[]                 @relation("HelpAuthor")
+  receivedMessages         Message[]                    @relation("ReceivedMessages")
+  sentMessages             Message[]                    @relation("SentMessages")
+  notifications            Notification[]
+  properties               Property[]                   @relation("HostProperties")
+  guestPropertyEnquiries   PropertyEnquiry[]            @relation("GuestEnquiries")
+  propertyEnquiries        PropertyEnquiry[]            @relation("HostEnquiries")
+  reviews                  Review[]                     @relation("UserReviews")
+  supportMessages          SupportMessage[]             @relation("SupportMessageSender")
+  transactions             Transaction[]
+  notificationPreferences  UserNotificationPreferences?
+  wallet                   Wallet?
 
   @@map("users")
 }
 
 model Property {
-  id          String   @id @default(cuid())
+  id          String            @id @default(cuid())
   title       String
   description String
   type        PropertyType
@@ -78,68 +67,62 @@ model Property {
   latitude    Float?
   longitude   Float?
   price       Float
-  currency    String   @default("XAF")
+  currency    String            @default("XAF")
   bedrooms    Int
   bathrooms   Int
   maxGuests   Int
-  amenities   String[] // Array of amenities
-  images      String[] // Array of image URLs
-  isAvailable Boolean  @default(true)
-  isVerified  Boolean  @default(false)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  hostId    String
-  host      User     @relation("HostProperties", fields: [hostId], references: [id], onDelete: Cascade)
-  coHosts   CoHost[] // Added co-hosts relation
-  bookings  Booking[]
-  reviews   Review[]
-  favorites Favorite[]
-  enquiries PropertyEnquiry[]
+  amenities   String[]
+  images      String[]
+  isAvailable Boolean           @default(true)
+  isVerified  Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  hostId      String
+  bookings    Booking[]
+  coHosts     CoHost[]
+  favorites   Favorite[]
+  host        User              @relation("HostProperties", fields: [hostId], references: [id], onDelete: Cascade)
+  enquiries   PropertyEnquiry[]
+  reviews     Review[]
 
   @@map("properties")
 }
 
 model Booking {
-  id        String        @id @default(cuid())
-  checkIn   DateTime
-  checkOut  DateTime
-  guests    Int
-  totalPrice Float
-  status    BookingStatus @default(PENDING)
-  specialRequests String?
-  paymentMethod PaymentMethod @default(MOBILE_MONEY)
+  id               String        @id @default(cuid())
+  checkIn          DateTime
+  checkOut         DateTime
+  guests           Int
+  totalPrice       Float
+  status           BookingStatus @default(PENDING)
+  specialRequests  String?
   paymentReference String?
-  paymentUrl String?
-  paymentStatus PaymentStatus @default(PENDING)
-  transactionId String?
-  statusReason String?
-  metadata    String?  // JSON data for additional info (preserving existing data)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-
-  // Relations
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  guestId    String
-  guest      User     @relation("GuestBookings", fields: [guestId], references: [id], onDelete: Cascade)
-  transactions Transaction[]
+  paymentUrl       String?
+  transactionId    String?
+  statusReason     String?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  propertyId       String
+  guestId          String
+  paymentMethod    PaymentMethod @default(MOBILE_MONEY)
+  paymentStatus    PaymentStatus @default(PENDING)
+  metadata         String?
+  guest            User          @relation("GuestBookings", fields: [guestId], references: [id], onDelete: Cascade)
+  property         Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  transactions     Transaction[]
 
   @@map("bookings")
 }
 
 model Review {
-  id        String   @id @default(cuid())
-  rating    Int      @db.SmallInt
-  comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
+  id         String   @id @default(cuid())
+  rating     Int      @db.SmallInt
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   userId     String
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   user       User     @relation("UserReviews", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, userId])
@@ -147,51 +130,45 @@ model Review {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  content   String
-  isRead    Boolean  @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
+  id         String   @id @default(cuid())
+  content    String
+  isRead     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   senderId   String
-  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiverId String
   receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@map("messages")
 }
 
 model Notification {
-  id        String   @id @default(cuid())
+  id        String             @id @default(cuid())
   title     String
   body      String
-  type      NotificationType @default(EMAIL)
+  type      NotificationType   @default(EMAIL)
   status    NotificationStatus @default(UNREAD)
-  data      String? // JSON data for additional info
+  data      String?
   readAt    DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("notifications")
 }
 
 model UserNotificationPreferences {
-  id                   String @id @default(cuid())
-  emailNotifications    Boolean @default(true)
-  pushNotifications     Boolean @default(true)
-  bookingNotifications  Boolean @default(true)
-  reviewNotifications   Boolean @default(true)
+  id                   String   @id @default(cuid())
+  emailNotifications   Boolean  @default(true)
+  pushNotifications    Boolean  @default(true)
+  bookingNotifications Boolean  @default(true)
+  reviewNotifications  Boolean  @default(true)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
-
-  // Relations
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               String   @unique
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_notification_preferences")
 }
@@ -199,167 +176,274 @@ model UserNotificationPreferences {
 model DeviceToken {
   id        String   @id @default(cuid())
   token     String   @unique
-  platform  String   @default("android") // android, ios, web
+  platform  String   @default("android")
   isActive  Boolean  @default(true)
   lastUsed  DateTime @default(now())
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // Relations
-  userId String
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("device_tokens")
 }
 
-// NEW: Wallet System Models
 model Wallet {
-  id        String   @id @default(cuid())
-  balance   Float    @default(0)
-  currency  String   @default("XAF")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id           String        @id @default(cuid())
+  balance      Float         @default(0)
+  currency     String        @default("XAF")
+  isActive     Boolean       @default(true)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  userId       String        @unique
   transactions Transaction[]
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("wallets")
 }
 
 model Transaction {
-  id          String   @id @default(cuid())
-  amount      Float
-  currency    String   @default("XAF")
-  type        TransactionType
-  status      TransactionStatus @default(PENDING)
-  description String
-  reference   String?  // External reference (Fapshi transaction ID, etc.)
-  metadata    String?  // JSON data for additional info
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Revenue tracking
-  hostServiceFee    Float?  // Amount charged to host
-  guestServiceFee   Float?  // Amount charged to guest
-  platformRevenue   Float?  // Total platform revenue from this transaction
-  netAmount         Float?  // Amount after fees (what host receives)
-
-  // Relations
-  walletId  String
-  wallet    Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookingId String?
-  booking   Booking? @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  id              String            @id @default(cuid())
+  amount          Float
+  currency        String            @default("XAF")
+  type            TransactionType
+  status          TransactionStatus @default(PENDING)
+  description     String
+  reference       String?
+  metadata        String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  hostServiceFee  Float?
+  guestServiceFee Float?
+  platformRevenue Float?
+  netAmount       Float?
+  walletId        String
+  userId          String
+  bookingId       String?
+  booking         Booking?          @relation(fields: [bookingId], references: [id])
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet          Wallet            @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
   @@map("transactions")
 }
 
 model RevenueConfig {
-  id                String   @id @default(cuid())
-  name              String   @unique // e.g., "standard", "premium", "host_only"
-  description       String?
-  
-  // Host fees
-  hostServiceFeePercent Float @default(5.0) // 5% default
-  hostServiceFeeMin     Float @default(0)   // Minimum fee amount
-  hostServiceFeeMax     Float?              // Maximum fee amount (optional)
-  
-  // Guest fees
-  guestServiceFeePercent Float @default(3.0) // 3% default
-  guestServiceFeeMin     Float @default(0)   // Minimum fee amount
-  guestServiceFeeMax     Float?              // Maximum fee amount (optional)
-  
-  // Platform settings
-  isActive          Boolean @default(true)
-  appliesToBooking  Boolean @default(true)
-  appliesToWithdrawal Boolean @default(false)
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  name                   String   @unique
+  description            String?
+  hostServiceFeePercent  Float    @default(5.0)
+  hostServiceFeeMin      Float    @default(0)
+  hostServiceFeeMax      Float?
+  guestServiceFeePercent Float    @default(3.0)
+  guestServiceFeeMin     Float    @default(0)
+  guestServiceFeeMax     Float?
+  isActive               Boolean  @default(true)
+  appliesToBooking       Boolean  @default(true)
+  appliesToWithdrawal    Boolean  @default(false)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   @@map("revenue_configs")
 }
 
 model PlatformRevenue {
-  id          String   @id @default(cuid())
-  date        DateTime @default(now())
-  revenueType String   // "HOST_FEE", "GUEST_FEE", "WITHDRAWAL_FEE"
-  amount      Float
-  currency    String   @default("XAF")
+  id            String   @id @default(cuid())
+  date          DateTime @default(now())
+  revenueType   String
+  amount        Float
+  currency      String   @default("XAF")
   transactionId String?
-  bookingId   String?
-  userId      String?
-  description String
-  metadata    String?  // JSON data for additional info
-  createdAt   DateTime @default(now())
+  bookingId     String?
+  userId        String?
+  description   String
+  metadata      String?
+  createdAt     DateTime @default(now())
 
   @@map("platform_revenues")
 }
 
 model Favorite {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  userId     String
   propertyId String
-  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  // Unique constraint to prevent duplicate favorites
   @@unique([userId, propertyId])
   @@map("favorites")
 }
 
 model PropertyEnquiry {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   subject     String
   message     String
-  status      EnquiryStatus @default(PENDING)
+  status      EnquiryStatus   @default(PENDING)
   priority    EnquiryPriority @default(NORMAL)
-  isRead      Boolean  @default(false)
+  isRead      Boolean         @default(false)
   response    String?
   respondedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  // Relations
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  guestId    String
-  guest      User     @relation("GuestEnquiries", fields: [guestId], references: [id], onDelete: Cascade)
-  hostId     String
-  host       User     @relation("HostEnquiries", fields: [hostId], references: [id], onDelete: Cascade)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  propertyId  String
+  guestId     String
+  hostId      String
+  guest       User            @relation("GuestEnquiries", fields: [guestId], references: [id], onDelete: Cascade)
+  host        User            @relation("HostEnquiries", fields: [hostId], references: [id], onDelete: Cascade)
+  property    Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
 
   @@map("property_enquiries")
 }
 
 model CoHost {
-  id          String          @id @default(cuid())
-  permissions CoHostPermission[] // Array of permissions
-  status      CoHostStatus    @default(PENDING)
-  invitedAt   DateTime        @default(now())
-  acceptedAt  DateTime?
-  removedAt   DateTime?
-  notes       String?         // Notes from primary host
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  // Relations
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  userId     String
-  user       User     @relation("CoHostProperties", fields: [userId], references: [id], onDelete: Cascade)
-  invitedBy  String   // ID of the user who sent the invitation
-  invitedByUser User  @relation("CoHostInvitations", fields: [invitedBy], references: [id], onDelete: Cascade)
+  id            String             @id @default(cuid())
+  permissions   CoHostPermission[]
+  status        CoHostStatus       @default(PENDING)
+  invitedAt     DateTime           @default(now())
+  acceptedAt    DateTime?
+  removedAt     DateTime?
+  notes         String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  propertyId    String
+  userId        String
+  invitedBy     String
+  invitedByUser User               @relation("CoHostInvitations", fields: [invitedBy], references: [id], onDelete: Cascade)
+  property      Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  user          User               @relation("CoHostProperties", fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([propertyId, userId])
   @@map("co_hosts")
+}
+
+model Blog {
+  id            String          @id @default(cuid())
+  title         String
+  slug          String          @unique
+  excerpt       String?
+  content       String
+  featuredImage String?
+  status        BlogStatus      @default(DRAFT)
+  publishedAt   DateTime?
+  viewCount     Int             @default(0)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  authorId      String
+  BlogToBlogTag BlogToBlogTag[]
+  comments      BlogComment[]
+  author        User            @relation("BlogAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("blogs")
+}
+
+model BlogTag {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  slug          String          @unique
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  BlogToBlogTag BlogToBlogTag[]
+
+  @@map("blog_tags")
+}
+
+model BlogComment {
+  id         String   @id @default(cuid())
+  content    String
+  isApproved Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  blogId     String
+  userId     String
+  blog       Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
+  user       User     @relation("BlogCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("blog_comments")
+}
+
+model HelpCenter {
+  id              String       @id @default(cuid())
+  title           String
+  slug            String       @unique
+  content         String
+  category        HelpCategory
+  priority        HelpPriority @default(MEDIUM)
+  isPublished     Boolean      @default(false)
+  viewCount       Int          @default(0)
+  helpfulCount    Int          @default(0)
+  notHelpfulCount Int          @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  authorId        String
+  author          User         @relation("HelpAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("help_center")
+}
+
+model FapshiConfig {
+  id          String            @id @default(cuid())
+  serviceType FapshiServiceType
+  isActive    Boolean           @default(false)
+  apiKey      String
+  apiUser     String
+  webhookUrl  String?
+  environment FapshiEnvironment @default(SANDBOX)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@unique([serviceType, environment])
+  @@map("fapshi_configs")
+}
+
+model CustomerSupport {
+  id           String           @id @default(cuid())
+  ticketId     String           @unique @default(cuid())
+  subject      String
+  description  String
+  category     SupportCategory
+  priority     SupportPriority  @default(MEDIUM)
+  status       SupportStatus    @default(OPEN)
+  userId       String
+  assignedToId String?
+  userEmail    String
+  userPhone    String?
+  attachments  String[]
+  resolution   String?
+  resolvedAt   DateTime?
+  resolvedBy   String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  assignedTo   User?            @relation("AdminSupportTickets", fields: [assignedToId], references: [id])
+  user         User             @relation("UserSupportTickets", fields: [userId], references: [id], onDelete: Cascade)
+  messages     SupportMessage[]
+
+  @@map("customer_support")
+}
+
+model SupportMessage {
+  id          String          @id @default(cuid())
+  ticketId    String
+  senderId    String
+  message     String
+  isInternal  Boolean         @default(false)
+  attachments String[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  sender      User            @relation("SupportMessageSender", fields: [senderId], references: [id])
+  ticket      CustomerSupport @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("support_messages")
+}
+
+model BlogToBlogTag {
+  A         String
+  B         String
+  blogs     Blog    @relation(fields: [A], references: [id], onDelete: Cascade)
+  blog_tags BlogTag @relation(fields: [B], references: [id], onDelete: Cascade)
+
+  @@id([A, B], map: "_BlogToBlogTag_AB_pkey")
+  @@index([B], map: "_BlogToBlogTag_B_index")
+  @@map("_BlogToBlogTag")
 }
 
 enum UserRole {
@@ -376,14 +460,14 @@ enum HostApprovalStatus {
 }
 
 enum PropertyType {
-  ROOM        // Individual rooms in a guest house
-  STUDIO      // Self-contained studio apartments
-  APARTMENT   // Full apartments within guest houses
-  VILLA       // Larger, more luxurious accommodations
-  SUITE       // Premium rooms with additional amenities
-  DORMITORY   // Shared accommodation for budget travelers
-  COTTAGE     // Standalone small houses
-  PENTHOUSE   // Top-floor luxury accommodations
+  ROOM
+  STUDIO
+  APARTMENT
+  VILLA
+  SUITE
+  DORMITORY
+  COTTAGE
+  PENTHOUSE
 }
 
 enum BookingStatus {
@@ -406,14 +490,13 @@ enum NotificationStatus {
   SENT
 }
 
-// NEW: Transaction Enums
 enum TransactionType {
-  PAYMENT      // Payment received
-  REFUND       // Refund issued
-  WITHDRAWAL   // Money withdrawn
-  DEPOSIT      // Money deposited
-  FEE          // Platform fee
-  BONUS        // Bonus or credit
+  PAYMENT
+  REFUND
+  WITHDRAWAL
+  DEPOSIT
+  FEE
+  BONUS
 }
 
 enum TransactionStatus {
@@ -463,111 +546,23 @@ enum HelpPriority {
 }
 
 enum CoHostPermission {
-  VIEW_ONLY      // Can only view property details
-  MANAGE_BOOKINGS // Can manage bookings, respond to messages
-  MANAGE_PROPERTY // Can edit property details, photos, pricing
-  MANAGE_FINANCES // Can view earnings, manage payouts
-  FULL_ACCESS    // Full access like the primary host
+  VIEW_ONLY
+  MANAGE_BOOKINGS
+  MANAGE_PROPERTY
+  MANAGE_FINANCES
+  FULL_ACCESS
 }
 
 enum CoHostStatus {
-  PENDING    // Invitation sent, waiting for acceptance
-  ACTIVE     // Co-host is active and has access
-  SUSPENDED  // Co-host access temporarily suspended
-  REMOVED    // Co-host has been removed
-}
-
-model Blog {
-  id          String     @id @default(cuid())
-  title       String
-  slug        String     @unique
-  excerpt     String?
-  content     String
-  featuredImage String?
-  status      BlogStatus @default(DRAFT)
-  publishedAt DateTime?
-  viewCount   Int        @default(0)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  // Relations
-  authorId    String
-  author      User       @relation("BlogAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-  tags        BlogTag[]
-  comments    BlogComment[]
-
-  @@map("blogs")
-}
-
-model BlogTag {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  blogs     Blog[]
-
-  @@map("blog_tags")
-}
-
-model BlogComment {
-  id        String   @id @default(cuid())
-  content   String
-  isApproved Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  blogId    String
-  blog      Blog     @relation(fields: [blogId], references: [id], onDelete: Cascade)
-  userId    String
-  user      User     @relation("BlogCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("blog_comments")
-}
-
-model HelpCenter {
-  id          String        @id @default(cuid())
-  title       String
-  slug        String        @unique
-  content     String
-  category    HelpCategory
-  priority    HelpPriority  @default(MEDIUM)
-  isPublished Boolean       @default(false)
-  viewCount   Int           @default(0)
-  helpfulCount Int          @default(0)
-  notHelpfulCount Int       @default(0)
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  // Relations
-  authorId    String
-  author      User          @relation("HelpAuthor", fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@map("help_center")
-}
-
-// Fapshi Payment Configuration Models
-model FapshiConfig {
-  id          String   @id @default(cuid())
-  serviceType FapshiServiceType
-  isActive    Boolean  @default(false)
-  apiKey      String
-  apiUser     String
-  webhookUrl  String?
-  environment FapshiEnvironment @default(SANDBOX)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@unique([serviceType, environment])
-  @@map("fapshi_configs")
+  PENDING
+  ACTIVE
+  SUSPENDED
+  REMOVED
 }
 
 enum FapshiServiceType {
-  COLLECTION    // For collecting payments from guests
-  DISBURSEMENT  // For paying out to hosts
+  COLLECTION
+  DISBURSEMENT
 }
 
 enum FapshiEnvironment {
@@ -576,10 +571,10 @@ enum FapshiEnvironment {
 }
 
 enum PaymentMethod {
-  MOBILE_MONEY  // MTN Mobile Money
-  ORANGE_MONEY  // Orange Money
-  CARD          // Credit/Debit Card (legacy)
-  CASH          // Cash payment (legacy)
+  MOBILE_MONEY
+  ORANGE_MONEY
+  CARD
+  CASH
 }
 
 enum PaymentStatus {
@@ -592,61 +587,6 @@ enum PaymentStatus {
   EXPIRED
   SUCCESSFUL
   PAID
-}
-
-model CustomerSupport {
-  id          String   @id @default(cuid())
-  ticketId    String   @unique @default(cuid())
-  subject     String
-  description String
-  category    SupportCategory
-  priority    SupportPriority @default(MEDIUM)
-  status      SupportStatus   @default(OPEN)
-  
-  // User who created the ticket
-  userId      String
-  user        User     @relation("UserSupportTickets", fields: [userId], references: [id], onDelete: Cascade)
-  
-  // Admin who handles the ticket
-  assignedToId String?
-  assignedTo   User?   @relation("AdminSupportTickets", fields: [assignedToId], references: [id])
-  
-  // Metadata
-  userEmail   String
-  userPhone   String?
-  attachments String[] // Array of file URLs
-  
-  // Resolution
-  resolution  String?
-  resolvedAt  DateTime?
-  resolvedBy  String?
-  
-  // Timestamps
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Relations
-  messages    SupportMessage[]
-
-  @@map("customer_support")
-}
-
-model SupportMessage {
-  id        String   @id @default(cuid())
-  ticketId  String
-  ticket    CustomerSupport @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  
-  senderId  String
-  sender    User     @relation("SupportMessageSender", fields: [senderId], references: [id])
-  
-  message   String
-  isInternal Boolean @default(false) // Internal admin notes
-  attachments String[] // Array of file URLs
-  
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@map("support_messages")
 }
 
 enum SupportCategory {

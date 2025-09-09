@@ -721,6 +721,229 @@ const getSystemAnalytics = async (req, res) => {
   }
 };
 
+/**
+ * Get all user wallets (admin only)
+ */
+const getAllWallets = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, userId, minBalance, maxBalance } = req.query;
+    const skip = (page - 1) * limit;
+
+    const where = {};
+
+    if (userId) where.userId = userId;
+    if (minBalance)
+      where.balance = { ...where.balance, gte: parseFloat(minBalance) };
+    if (maxBalance)
+      where.balance = { ...where.balance, lte: parseFloat(maxBalance) };
+
+    const wallets = await prisma.wallet.findMany({
+      where,
+      skip: parseInt(skip),
+      take: parseInt(limit),
+      orderBy: { balance: "desc" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            hostApprovalStatus: true,
+          },
+        },
+        _count: {
+          select: {
+            transactions: true,
+          },
+        },
+      },
+    });
+
+    const total = await prisma.wallet.count({ where });
+
+    // Calculate total platform wallet balance
+    const totalBalance = await prisma.wallet.aggregate({
+      _sum: { balance: true },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        wallets,
+        statistics: {
+          totalWallets: total,
+          totalBalance: totalBalance._sum.balance || 0,
+          currency: "XAF",
+        },
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get all wallets error:", error);
+    const dbError = handleDatabaseError(error);
+    res.status(500).json(dbError);
+  }
+};
+
+/**
+ * Get specific user wallet (admin only)
+ */
+const getUserWallet = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const wallet = await prisma.wallet.findUnique({
+      where: { userId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            role: true,
+            hostApprovalStatus: true,
+            createdAt: true,
+          },
+        },
+        transactions: {
+          take: 10,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true,
+            amount: true,
+            type: true,
+            status: true,
+            description: true,
+            createdAt: true,
+          },
+        },
+        _count: {
+          select: {
+            transactions: true,
+          },
+        },
+      },
+    });
+
+    if (!wallet) {
+      return res.status(404).json({
+        error: "Wallet not found",
+        message: "User wallet does not exist",
+      });
+    }
+
+    // Get transaction statistics
+    const transactionStats = await prisma.transaction.groupBy({
+      by: ["type"],
+      where: { userId },
+      _sum: { amount: true },
+      _count: { id: true },
+    });
+
+    res.json({
+      success: true,
+      data: {
+        wallet: {
+          id: wallet.id,
+          balance: wallet.balance,
+          currency: wallet.currency,
+          isActive: wallet.isActive,
+          createdAt: wallet.createdAt,
+          updatedAt: wallet.updatedAt,
+        },
+        user: wallet.user,
+        recentTransactions: wallet.transactions,
+        statistics: {
+          totalTransactions: wallet._count.transactions,
+          transactionBreakdown: transactionStats,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get user wallet error:", error);
+    const dbError = handleDatabaseError(error);
+    res.status(500).json(dbError);
+  }
+};
+
+/**
+ * Get wallet statistics (admin only)
+ */
+const getWalletStatistics = async (req, res) => {
+  try {
+    const [
+      totalWallets,
+      totalBalance,
+      activeWallets,
+      walletsByRole,
+      topWallets,
+      recentTransactions,
+    ] = await Promise.all([
+      prisma.wallet.count(),
+      prisma.wallet.aggregate({ _sum: { balance: true } }),
+      prisma.wallet.count({ where: { isActive: true } }),
+      prisma.wallet.groupBy({
+        by: ["user"],
+        _count: { id: true },
+        _sum: { balance: true },
+      }),
+      prisma.wallet.findMany({
+        take: 10,
+        orderBy: { balance: "desc" },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+              role: true,
+            },
+          },
+        },
+      }),
+      prisma.transaction.findMany({
+        take: 10,
+        orderBy: { createdAt: "desc" },
+        include: {
+          user: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        overview: {
+          totalWallets,
+          totalBalance: totalBalance._sum.balance || 0,
+          activeWallets,
+          currency: "XAF",
+        },
+        topWallets,
+        recentTransactions,
+      },
+    });
+  } catch (error) {
+    console.error("Get wallet statistics error:", error);
+    const dbError = handleDatabaseError(error);
+    res.status(500).json(dbError);
+  }
+};
+
 // Get admin preferences
 const getAdminPreferences = async (req, res) => {
   try {
@@ -835,6 +1058,9 @@ module.exports = {
   getSystemNotifications,
   sendSystemNotification,
   getSystemAnalytics,
+  getAllWallets,
+  getUserWallet,
+  getWalletStatistics,
   getAdminPreferences,
   updateAdminPreferences,
 };

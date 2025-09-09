@@ -17,6 +17,9 @@ router.get("/my-bookings", bookingController.getUserBookings);
 router.get("/availability", bookingController.checkAvailability);
 router.get("/stats", bookingController.getBookingStats);
 router.get("/:id", bookingController.getBookingById);
+
+// Check if user has booked a specific property
+router.get("/has-booked/:propertyId", bookingController.hasUserBookedProperty);
 router.put("/:id/cancel", bookingController.cancelBooking);
 
 // Host routes

@@ -107,7 +107,7 @@ Content-Type: application/json
 - `checkOut`: Valid ISO date (must be after check-in)
 - `guests`: Integer between 1-50
 - `specialRequests`: Optional, max 500 characters
-- `paymentMethod`: Optional, one of MOBILE_MONEY, CARD, CASH
+- `paymentMethod`: Optional, one of MOBILE_MONEY, ORANGE_MONEY
 
 **Example Request:**
 
@@ -791,3 +791,87 @@ curl -X GET "http://localhost:5000/api/v1/bookings/booking-id" \
 3. **Error Handling**: Implement proper error handling for failed payments
 4. **Logging**: Log all payment-related activities for debugging
 5. **Testing**: Thoroughly test payment flows before going live
+
+### Check if User Has Booked a Property
+
+**GET** `/api/v1/bookings/has-booked/:propertyId`
+
+Check if the authenticated user has booked a specific property.
+
+**Headers:**
+```
+Authorization: Bearer <jwt-token>
+```
+
+**Path Parameters:**
+- `propertyId` (required): The ID of the property to check
+
+**Query Parameters:**
+- `status` (optional): Filter by booking status (PENDING, CONFIRMED, CANCELLED, COMPLETED)
+- `includeHistory` (optional): Include all booking history for this property (true/false)
+
+**Example Request:**
+```bash
+curl -X GET "http://localhost:5000/api/v1/bookings/has-booked/prop123?status=CONFIRMED" \
+  -H "Authorization: Bearer <your-jwt-token>"
+```
+
+**Response (User has booked - 200):**
+```json
+{
+  "success": true,
+  "data": {
+    "hasBooked": true,
+    "property": {
+      "id": "prop123",
+      "title": "Beautiful Apartment in Douala"
+    },
+    "latestBooking": {
+      "id": "booking123",
+      "status": "CONFIRMED",
+      "checkIn": "2025-09-15T00:00:00.000Z",
+      "checkOut": "2025-09-20T00:00:00.000Z",
+      "totalPrice": 250000,
+      "createdAt": "2025-08-08T16:15:01.213Z"
+    }
+  }
+}
+```
+
+**Response (User has not booked - 200):**
+```json
+{
+  "success": true,
+  "data": {
+    "hasBooked": false,
+    "property": {
+      "id": "prop123",
+      "title": "Beautiful Apartment in Douala"
+    },
+    "latestBooking": null
+  }
+}
+```
+
+**Response (Property not found - 404):**
+```json
+{
+  "success": false,
+  "message": "Property not found"
+}
+```
+
+**Response (Missing property ID - 400):**
+```json
+{
+  "success": false,
+  "message": "Property ID is required"
+}
+```
+
+**Use Cases:**
+- Check if a user can leave a review (only users who have booked can review)
+- Display "Book Again" button for properties the user has previously booked
+- Show booking history for a specific property
+- Validate user permissions for property-related actions
+

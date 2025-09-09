@@ -33,6 +33,11 @@ router.post("/notifications/send", adminController.sendSystemNotification);
 // Analytics
 router.get("/analytics", adminController.getSystemAnalytics);
 
+// Wallet Management
+router.get("/wallets", adminController.getAllWallets);
+router.get("/wallets/statistics", adminController.getWalletStatistics);
+router.get("/wallets/user/:userId", adminController.getUserWallet);
+
 // Admin preferences
 router.get(
   "/preferences",

@@ -1186,3 +1186,98 @@ module.exports = {
   getBookingStats,
   calculateBookingFees,
 };
+
+/**
+ * Check if a user has booked a specific property
+ */
+const hasUserBookedProperty = async (req, res) => {
+  try {
+    const { propertyId } = req.params;
+    const userId = req.user.id;
+
+    // Validate propertyId
+    if (!propertyId) {
+      return res.status(400).json({
+        success: false,
+        message: "Property ID is required",
+      });
+    }
+
+    // Check if property exists
+    const property = await prisma.property.findUnique({
+      where: { id: propertyId },
+      select: { id: true, title: true },
+    });
+
+    if (!property) {
+      return res.status(404).json({
+        success: false,
+        message: "Property not found",
+      });
+    }
+
+    // Check if user has any bookings for this property
+    const booking = await prisma.booking.findFirst({
+      where: {
+        propertyId: propertyId,
+        guestId: userId,
+      },
+      select: {
+        id: true,
+        status: true,
+        checkIn: true,
+        checkOut: true,
+        totalPrice: true,
+        createdAt: true,
+        property: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const hasBooked = !!booking;
+
+    res.json({
+      success: true,
+      data: {
+        hasBooked,
+        property: {
+          id: property.id,
+          title: property.title,
+        },
+        latestBooking: hasBooked ? {
+          id: booking.id,
+          status: booking.status,
+          checkIn: booking.checkIn,
+          checkOut: booking.checkOut,
+          totalPrice: booking.totalPrice,
+          createdAt: booking.createdAt,
+        } : null,
+      },
+    });
+  } catch (error) {
+    console.error("Check user booking error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to check booking status",
+    });
+  }
+};
+
+module.exports = {
+  createBooking,
+  getUserBookings,
+  getHostBookings,
+  getBookingById,
+  updateBookingStatus,
+  cancelBooking,
+  checkAvailability,
+  handlePaymentWebhook,
+  getBookingStats,
+  calculateBookingFees,
+  hasUserBookedProperty,
+};
