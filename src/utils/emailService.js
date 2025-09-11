@@ -1,23 +1,115 @@
 const nodemailer = require('nodemailer');
 
+// Connection pool to reuse connections
+let transporter = null;
+
 const createTransporter = () => {
-  return nodemailer.createTransport({
-    host: "smtp.titan.email",
-    port: 465,
-    secure: true,
+  if (transporter) {
+    return transporter;
+  }
+
+  const config = {
+    host: process.env.EMAIL_HOST || "smtp.titan.email",
+    port: parseInt(process.env.EMAIL_PORT) || 465,
+    secure: true, // true for 465, false for other ports
     auth: {
       user: process.env.EMAIL_USER || "no-reply@roomfinder237.com",
       pass: process.env.EMAIL_PASSWORD || "#Noreply123@#",
     },
     tls: {
-      rejectUnauthorized: false
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2',
+      ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA'
+    },
+    // Connection timeout settings
+    connectionTimeout: 60000, // 60 seconds
+    greetingTimeout: 30000,   // 30 seconds
+    socketTimeout: 60000,     // 60 seconds
+    // Pool settings for connection reuse
+    pool: true,
+    maxConnections: 5,
+    maxMessages: 100,
+    rateDelta: 20000, // 20 seconds
+    rateLimit: 5, // max 5 messages per rateDelta
+    // Retry settings
+    retryDelay: 5000, // 5 seconds
+    retryAttempts: 3
+  };
+
+  transporter = nodemailer.createTransport(config);
+
+  // Verify connection configuration
+  transporter.verify((error, success) => {
+    if (error) {
+      console.error('SMTP connection verification failed:', error);
+    } else {
+      console.log('SMTP server is ready to take our messages');
     }
   });
+
+  return transporter;
+};
+
+// Fallback SMTP configuration
+const createFallbackTransporter = () => {
+  const fallbackConfig = {
+    host: process.env.EMAIL_FALLBACK_HOST || "smtp.gmail.com",
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: process.env.EMAIL_FALLBACK_USER || process.env.EMAIL_USER,
+      pass: process.env.EMAIL_FALLBACK_PASS || process.env.EMAIL_PASSWORD,
+    },
+    tls: {
+      rejectUnauthorized: false,
+      minVersion: 'TLSv1.2'
+    },
+    connectionTimeout: 30000,
+    greetingTimeout: 15000,
+    socketTimeout: 30000,
+  };
+
+  return nodemailer.createTransport(fallbackConfig);
+};
+
+// Enhanced email sending with retry logic
+const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
+  let lastError = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Email send attempt ${attempt}/${maxRetries}`);
+      
+      // Try primary transporter first
+      let currentTransporter = createTransporter();
+      
+      // If attempt > 1, try fallback
+      if (attempt > 1) {
+        console.log('Trying fallback SMTP configuration...');
+        currentTransporter = createFallbackTransporter();
+      }
+
+      const result = await currentTransporter.sendMail(mailOptions);
+      console.log('Email sent successfully:', result.messageId);
+      return result;
+      
+    } catch (error) {
+      lastError = error;
+      console.error(`Email send attempt ${attempt} failed:`, error.message);
+      
+      if (attempt < maxRetries) {
+        const delay = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
+        console.log(`Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  throw lastError;
 };
 
 const sendVerificationEmail = async (email, firstName, verificationToken) => {
   try {
-    const transporter = createTransporter();
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
 
     const mailOptions = {
@@ -50,7 +142,7 @@ const sendVerificationEmail = async (email, firstName, verificationToken) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendEmailWithRetry(mailOptions);
     console.log('Verification email sent successfully to:', email);
   } catch (error) {
     console.error('Error sending verification email:', error);
@@ -60,7 +152,6 @@ const sendVerificationEmail = async (email, firstName, verificationToken) => {
 
 const sendPasswordResetEmail = async (email, firstName, resetToken) => {
   try {
-    const transporter = createTransporter();
     const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
 
     const mailOptions = {
@@ -93,7 +184,7 @@ const sendPasswordResetEmail = async (email, firstName, resetToken) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendEmailWithRetry(mailOptions);
     console.log('Password reset email sent successfully to:', email);
   } catch (error) {
     console.error('Error sending password reset email:', error);
@@ -103,8 +194,6 @@ const sendPasswordResetEmail = async (email, firstName, resetToken) => {
 
 const sendWelcomeEmail = async (email, firstName) => {
   try {
-    const transporter = createTransporter();
-
     const mailOptions = {
       from: `"Room Finder" <${process.env.EMAIL_USER || "no-reply@roomfinder237.com"}>`,
       to: email,
@@ -139,7 +228,7 @@ const sendWelcomeEmail = async (email, firstName) => {
       `,
     };
 
-    await transporter.sendMail(mailOptions);
+    await sendEmailWithRetry(mailOptions);
     console.log('Welcome email sent successfully to:', email);
   } catch (error) {
     console.error('Error sending welcome email:', error);
@@ -147,8 +236,52 @@ const sendWelcomeEmail = async (email, firstName) => {
   }
 };
 
+// Generic email sending function
+const sendEmail = async (to, subject, html, from = null) => {
+  try {
+    const mailOptions = {
+      from: from || `"Room Finder" <${process.env.EMAIL_USER || "no-reply@roomfinder237.com"}>`,
+      to: to,
+      subject: subject,
+      html: html,
+    };
+
+    await sendEmailWithRetry(mailOptions);
+    console.log('Email sent successfully to:', to);
+  } catch (error) {
+    console.error('Error sending email:', error);
+    throw error;
+  }
+};
+
+// Test email configuration
+const testEmailConfiguration = async () => {
+  try {
+    const testTransporter = createTransporter();
+    await testTransporter.verify();
+    console.log('✅ Primary SMTP configuration is working');
+    return true;
+  } catch (error) {
+    console.error('❌ Primary SMTP configuration failed:', error.message);
+    
+    try {
+      const fallbackTransporter = createFallbackTransporter();
+      await fallbackTransporter.verify();
+      console.log('✅ Fallback SMTP configuration is working');
+      return true;
+    } catch (fallbackError) {
+      console.error('❌ Fallback SMTP configuration also failed:', fallbackError.message);
+      return false;
+    }
+  }
+};
+
 module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
+  sendEmail,
+  testEmailConfiguration,
+  createTransporter,
+  createFallbackTransporter
 };
