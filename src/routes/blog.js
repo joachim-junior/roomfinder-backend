@@ -63,6 +63,7 @@ const validateComment = [
 // Public routes
 router.get("/", blogController.getAllBlogs);
 router.get("/tags", blogController.getAllTags);
+router.get("/:slug", blogController.getBlogBySlug); // Moved to public section
 
 // Protected routes (require authentication)
 router.use(authenticateToken);
@@ -83,8 +84,5 @@ router.post("/tags", validateTag, blogController.createTag);
 
 // Comment moderation
 router.put("/comments/:commentId/moderate", blogController.moderateComment);
-
-// Public route for getting blog by slug (must be last to avoid conflicts)
-router.get("/:slug", blogController.getBlogBySlug);
 
 module.exports = router;

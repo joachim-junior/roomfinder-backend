@@ -20,9 +20,11 @@ class BlogController {
       };
 
       if (tag) {
-        where.tags = {
+        where.BlogToBlogTag = {
           some: {
-            slug: tag,
+            blog_tags: {
+              slug: tag,
+            },
           },
         };
       }
@@ -49,7 +51,11 @@ class BlogController {
               avatar: true,
             },
           },
-          tags: true,
+          BlogToBlogTag: {
+            include: {
+              blog_tags: true,
+            },
+          },
           _count: {
             select: {
               comments: true,
@@ -97,7 +103,11 @@ class BlogController {
               avatar: true,
             },
           },
-          tags: true,
+          BlogToBlogTag: {
+            include: {
+              blog_tags: true,
+            },
+          },
           comments: {
             where: { isApproved: true },
             include: {
@@ -187,8 +197,10 @@ class BlogController {
       };
 
       if (tagIds.length > 0) {
-        blogData.tags = {
-          connect: tagIds.map((id) => ({ id })),
+        blogData.BlogToBlogTag = {
+          create: tagIds.map((tagId) => ({
+            blog_tags: { connect: { id: tagId } },
+          })),
         };
       }
 
@@ -202,7 +214,11 @@ class BlogController {
               lastName: true,
             },
           },
-          tags: true,
+          BlogToBlogTag: {
+            include: {
+              blog_tags: true,
+            },
+          },
         },
       });
 
@@ -283,10 +299,18 @@ class BlogController {
         updateData.publishedAt = new Date();
       }
 
-      // Handle tags
+      // Handle tags - delete existing and create new ones
       if (tagIds.length > 0) {
-        updateData.tags = {
-          set: tagIds.map((id) => ({ id })),
+        // First delete existing tags
+        await prisma.blogToBlogTag.deleteMany({
+          where: { A: blogId },
+        });
+
+        // Then create new ones
+        updateData.BlogToBlogTag = {
+          create: tagIds.map((tagId) => ({
+            blog_tags: { connect: { id: tagId } },
+          })),
         };
       }
 
@@ -301,7 +325,11 @@ class BlogController {
               lastName: true,
             },
           },
-          tags: true,
+          BlogToBlogTag: {
+            include: {
+              blog_tags: true,
+            },
+          },
         },
       });
 
@@ -360,7 +388,7 @@ class BlogController {
         include: {
           _count: {
             select: {
-              blogs: true,
+              BlogToBlogTag: true,
             },
           },
         },

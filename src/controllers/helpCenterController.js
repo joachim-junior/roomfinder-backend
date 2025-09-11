@@ -12,13 +12,26 @@ class HelpCenterController {
         category,
         priority,
         search,
-        isPublished = true,
+        isPublished,
       } = req.query;
       const skip = (page - 1) * limit;
 
-      const where = {
-        isPublished: isPublished === "true",
-      };
+      // Handle isPublished parameter properly
+      let publishedFilter = true; // Default to published only
+      if (isPublished !== undefined) {
+        if (isPublished === "ALL") {
+          publishedFilter = undefined; // Show all
+        } else if (isPublished === "false" || isPublished === false) {
+          publishedFilter = false; // Show drafts only
+        } else if (isPublished === "true" || isPublished === true) {
+          publishedFilter = true; // Show published only
+        }
+      }
+
+      const where = {};
+      if (publishedFilter !== undefined) {
+        where.isPublished = publishedFilter;
+      }
 
       if (category) {
         where.category = category;
@@ -30,8 +43,8 @@ class HelpCenterController {
 
       if (search) {
         where.OR = [
-          { title: { contains: search, mode: "insensitive" } },
-          { content: { contains: search, mode: "insensitive" } },
+          { title: { contains: q, mode: "insensitive" } },
+          { content: { contains: q, mode: "insensitive" } },
         ];
       }
 
