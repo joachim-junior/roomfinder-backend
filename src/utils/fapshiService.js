@@ -200,28 +200,57 @@ class FapshiService {
           dateConfirmed: webhookData.dateConfirmed,
         };
       } else {
-        // Verify the transaction status from Fapshi's API to be sure of its source
-        event = await this.verifyPayment(webhookData.transId);
+        // Try verify as COLLECTION first, then fallback to DISBURSEMENT
+        try {
+          event = await this.verifyPayment(webhookData.transId, "COLLECTION");
+        } catch (e) {
+          event = await this.verifyPayment(webhookData.transId, "DISBURSEMENT");
+        }
 
         if (!event.success) {
           throw new Error(`Webhook verification failed: ${event.message}`);
         }
       }
 
-      // Handle the event based on status
-      switch (event.status) {
-        case "SUCCESSFUL":
-          return await this.handleSuccessfulPayment(event);
-        case "FAILED":
-          return await this.handleFailedPayment(event);
-        case "EXPIRED":
-          return await this.handleExpiredPayment(event);
-        case "CREATED":
-          return await this.handleCreatedPayment(event);
-        default:
-          console.log(`Unhandled event status: ${event.status}`);
-          return { success: true, message: "Event ignored" };
+      // Determine whether this webhook is for a booking payment or a payout
+      const booking = await prisma.booking.findUnique({
+        where: { id: event.externalId },
+        select: { id: true },
+      });
+
+      if (booking) {
+        // Handle booking-related events
+        switch (event.status) {
+          case "SUCCESSFUL":
+            return await this.handleSuccessfulPayment(event);
+          case "FAILED":
+            return await this.handleFailedPayment(event);
+          case "EXPIRED":
+            return await this.handleExpiredPayment(event);
+          case "CREATED":
+          case "PENDING":
+            return await this.handleCreatedPayment(event);
+          default:
+            console.log(`Unhandled event status: ${event.status}`);
+            return { success: true, message: "Event ignored" };
+        }
       }
+
+      // Not a booking: try to treat as payout against a transaction id
+      const transaction = await prisma.transaction.findUnique({
+        where: { id: event.externalId },
+        include: { wallet: true },
+      });
+
+      if (transaction && transaction.type === "WITHDRAWAL") {
+        return await this.handlePayoutEvent(transaction, event);
+      }
+
+      // Unknown target
+      console.log(
+        `Webhook externalId ${event.externalId} did not match booking or withdrawal transaction`
+      );
+      return { success: false, message: "Unknown webhook target" };
     } catch (error) {
       console.error("Error processing webhook:", error);
       throw error;
@@ -348,6 +377,58 @@ class FapshiService {
       return { success: true, message: "Payment completed successfully" };
     } catch (error) {
       console.error("Error handling successful payment:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Handle payout webhook for withdrawals
+   */
+  async handlePayoutEvent(transaction, event) {
+    try {
+      const updates = {
+        reference: event.transId,
+        metadata: JSON.stringify({
+          ...(transaction.metadata ? JSON.parse(transaction.metadata) : {}),
+          medium: event.medium,
+          serviceName: event.serviceName,
+          financialTransId: event.financialTransId,
+          dateInitiated: event.dateInitiated,
+          dateConfirmed: event.dateConfirmed,
+          payoutStatus: event.status,
+        }),
+      };
+
+      switch (event.status) {
+        case "SUCCESSFUL":
+          updates.status = "COMPLETED";
+          break;
+        case "FAILED":
+        case "EXPIRED":
+          updates.status = "FAILED";
+          // Refund wallet since payout failed/expired
+          await prisma.wallet.update({
+            where: { id: transaction.walletId },
+            data: { balance: { increment: transaction.amount } },
+          });
+          break;
+        case "CREATED":
+        case "PENDING":
+          updates.status = "PROCESSING";
+          break;
+        default:
+          // Keep current status
+          break;
+      }
+
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: updates,
+      });
+
+      return { success: true, message: "Payout webhook processed" };
+    } catch (error) {
+      console.error("Error handling payout event:", error);
       throw error;
     }
   }

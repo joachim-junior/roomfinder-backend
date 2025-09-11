@@ -1,6 +1,7 @@
 const { prisma, handleDatabaseError } = require("./database");
 const notificationService = require("./notificationService");
 const revenueService = require("./revenueService");
+const fapshi = require("../../fapshi");
 
 class WalletService {
   /**
@@ -420,7 +421,30 @@ class WalletService {
         throw new Error("Withdrawal amount too small after fees");
       }
 
-      // Create withdrawal transaction
+      // Prepare helper to map method to Fapshi medium
+      const mapMethodToMedium = (method) => {
+        switch (method) {
+          case "MOBILE_MONEY":
+          case "MTN_MOMO":
+            return "mobile money";
+          case "ORANGE_MONEY":
+            return "orange money";
+          default:
+            return "mobile money";
+        }
+      };
+
+      // Normalize phone number if provided (strip +237)
+      let payoutPhone = accountNumber;
+      if (
+        payoutPhone &&
+        typeof payoutPhone === "string" &&
+        payoutPhone.startsWith("+237")
+      ) {
+        payoutPhone = payoutPhone.replace("+237", "");
+      }
+
+      // Create withdrawal transaction (PENDING)
       const transaction = await prisma.transaction.create({
         data: {
           amount: amount,
@@ -431,7 +455,7 @@ class WalletService {
           reference: `WD-${Date.now()}`,
           metadata: JSON.stringify({
             paymentMethod,
-            accountNumber,
+            accountNumber: payoutPhone,
             withdrawalFee: withdrawalFees.withdrawalFee,
             netAmount: netAmount,
           }),
@@ -440,10 +464,64 @@ class WalletService {
         },
       });
 
-      // Deduct from wallet
+      // Deduct from wallet immediately
       await prisma.wallet.update({
         where: { id: user.wallet.id },
         data: { balance: user.wallet.balance - amount },
+      });
+
+      // Initiate external payout with Fapshi for the net amount
+      const payoutPayload = {
+        amount: Math.floor(netAmount),
+        phone: payoutPhone || user.phone,
+        medium: mapMethodToMedium(paymentMethod),
+        name: `${user.firstName || ""} ${user.lastName || ""}`.trim(),
+        email: user.email,
+        userId: userId,
+        externalId: transaction.id,
+        message: `Wallet withdrawal ${transaction.id}`,
+      };
+
+      const payoutResponse = await fapshi.payout(payoutPayload);
+
+      if (!payoutResponse || payoutResponse.statusCode !== 200) {
+        // Rollback: restore wallet balance and mark transaction as FAILED
+        await prisma.wallet.update({
+          where: { id: user.wallet.id },
+          data: { balance: user.wallet.balance },
+        });
+
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: {
+            status: "FAILED",
+            metadata: JSON.stringify({
+              ...JSON.parse(transaction.metadata || "{}"),
+              payoutError: payoutResponse
+                ? payoutResponse.message
+                : "Payout failed",
+            }),
+          },
+        });
+
+        throw new Error(
+          payoutResponse ? payoutResponse.message : "Payout failed"
+        );
+      }
+
+      // Update transaction with Fapshi transId and mark as PROCESSING
+      const updatedTransaction = await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          status: "PROCESSING",
+          reference: payoutResponse.transId || transaction.reference,
+          metadata: JSON.stringify({
+            ...JSON.parse(transaction.metadata || "{}"),
+            fapshiTransId: payoutResponse.transId,
+            serviceName: payoutResponse.serviceName,
+            dateInitiated: payoutResponse.dateInitiated,
+          }),
+        },
       });
 
       // Record platform revenue from withdrawal fee
@@ -479,9 +557,13 @@ class WalletService {
       });
 
       return {
-        transaction,
+        transaction: updatedTransaction,
         withdrawalFees,
         newBalance: user.wallet.balance - amount,
+        payout: {
+          transId: payoutResponse.transId,
+          status: payoutResponse.status || "PROCESSING",
+        },
       };
     } catch (error) {
       throw error;

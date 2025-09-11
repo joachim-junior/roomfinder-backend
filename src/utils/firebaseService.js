@@ -195,7 +195,20 @@ class FirebaseService {
         tokens,
       };
 
-      const response = await admin.messaging().sendMulticast(message);
+      // Check if Firebase messaging is available and send notification
+      let response;
+      try {
+        if (!admin.apps.length) {
+          throw new Error("Firebase not initialized");
+        }
+        response = await admin.messaging().sendMulticast(message);
+      } catch (error) {
+        console.error("Firebase messaging error:", error.message);
+        return {
+          success: false,
+          message: "Firebase messaging service not available: " + error.message
+        };
+      }
 
       // Handle results
       response.responses.forEach((result, index) => {

@@ -74,7 +74,7 @@ const register = async(req, res) => {
         });
 
         // Send verification email
-        await sendVerificationEmail(email, verificationToken, firstName);
+        await sendVerificationEmail(email, firstName, verificationToken);
 
         // Generate JWT token
         const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
@@ -555,7 +555,7 @@ const resendVerification = async(req, res) => {
         });
 
         // Send verification email
-        await sendVerificationEmail(email, verificationToken, user.firstName);
+        await sendVerificationEmail(email, user.firstName, verificationToken);
 
         res.json({
             message: "Verification email sent successfully",
