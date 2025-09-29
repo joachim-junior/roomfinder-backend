@@ -1,4 +1,4 @@
-const nodemailer = require('nodemailer');
+const nodemailer = require("nodemailer");
 
 // Connection pool to reuse connections
 let transporter = null;
@@ -18,13 +18,13 @@ const createTransporter = () => {
     },
     tls: {
       rejectUnauthorized: false,
-      minVersion: 'TLSv1.2',
-      ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA'
+      minVersion: "TLSv1.2",
+      ciphers: "HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA",
     },
     // Connection timeout settings
     connectionTimeout: 60000, // 60 seconds
-    greetingTimeout: 30000,   // 30 seconds
-    socketTimeout: 60000,     // 60 seconds
+    greetingTimeout: 30000, // 30 seconds
+    socketTimeout: 60000, // 60 seconds
     // Pool settings for connection reuse
     pool: true,
     maxConnections: 5,
@@ -33,7 +33,7 @@ const createTransporter = () => {
     rateLimit: 5, // max 5 messages per rateDelta
     // Retry settings
     retryDelay: 5000, // 5 seconds
-    retryAttempts: 3
+    retryAttempts: 3,
   };
 
   transporter = nodemailer.createTransport(config);
@@ -41,9 +41,9 @@ const createTransporter = () => {
   // Verify connection configuration
   transporter.verify((error, success) => {
     if (error) {
-      console.error('SMTP connection verification failed:', error);
+      console.error("SMTP connection verification failed:", error);
     } else {
-      console.log('SMTP server is ready to take our messages');
+      console.log("SMTP server is ready to take our messages");
     }
   });
 
@@ -62,7 +62,7 @@ const createFallbackTransporter = () => {
     },
     tls: {
       rejectUnauthorized: false,
-      minVersion: 'TLSv1.2'
+      minVersion: "TLSv1.2",
     },
     connectionTimeout: 30000,
     greetingTimeout: 15000,
@@ -75,45 +75,48 @@ const createFallbackTransporter = () => {
 // Enhanced email sending with retry logic
 const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   let lastError = null;
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`Email send attempt ${attempt}/${maxRetries}`);
-      
+
       // Try primary transporter first
       let currentTransporter = createTransporter();
-      
+
       // If attempt > 1, try fallback
       if (attempt > 1) {
-        console.log('Trying fallback SMTP configuration...');
+        console.log("Trying fallback SMTP configuration...");
         currentTransporter = createFallbackTransporter();
       }
 
       const result = await currentTransporter.sendMail(mailOptions);
-      console.log('Email sent successfully:', result.messageId);
+      console.log("Email sent successfully:", result.messageId);
       return result;
-      
     } catch (error) {
       lastError = error;
       console.error(`Email send attempt ${attempt} failed:`, error.message);
-      
+
       if (attempt < maxRetries) {
         const delay = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
         console.log(`Retrying in ${delay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
   }
-  
+
   throw lastError;
 };
 
 const sendVerificationEmail = async (email, firstName, verificationToken) => {
   try {
-    const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify-email?token=${verificationToken}`;
+    const verificationUrl = `${
+      process.env.FRONTEND_URL || "https://roomfinder237.com"
+    }/verify-email?token=${verificationToken}`;
 
     const mailOptions = {
-      from: `"Room Finder" <${process.env.EMAIL_USER || "no-reply@roomfinder237.com"}>`,
+      from: `"Room Finder" <${
+        process.env.EMAIL_USER || "no-reply@roomfinder237.com"
+      }>`,
       to: email,
       subject: "Verify Your Email - Room Finder",
       html: `
@@ -143,19 +146,23 @@ const sendVerificationEmail = async (email, firstName, verificationToken) => {
     };
 
     await sendEmailWithRetry(mailOptions);
-    console.log('Verification email sent successfully to:', email);
+    console.log("Verification email sent successfully to:", email);
   } catch (error) {
-    console.error('Error sending verification email:', error);
+    console.error("Error sending verification email:", error);
     throw error;
   }
 };
 
 const sendPasswordResetEmail = async (email, firstName, resetToken) => {
   try {
-    const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+    const resetUrl = `${
+      process.env.FRONTEND_URL || "http://localhost:3000"
+    }/reset-password?token=${resetToken}`;
 
     const mailOptions = {
-      from: `"Room Finder" <${process.env.EMAIL_USER || "no-reply@roomfinder237.com"}>`,
+      from: `"Room Finder" <${
+        process.env.EMAIL_USER || "no-reply@roomfinder237.com"
+      }>`,
       to: email,
       subject: "Reset Your Password - Room Finder",
       html: `
@@ -185,9 +192,9 @@ const sendPasswordResetEmail = async (email, firstName, resetToken) => {
     };
 
     await sendEmailWithRetry(mailOptions);
-    console.log('Password reset email sent successfully to:', email);
+    console.log("Password reset email sent successfully to:", email);
   } catch (error) {
-    console.error('Error sending password reset email:', error);
+    console.error("Error sending password reset email:", error);
     throw error;
   }
 };
@@ -195,7 +202,9 @@ const sendPasswordResetEmail = async (email, firstName, resetToken) => {
 const sendWelcomeEmail = async (email, firstName) => {
   try {
     const mailOptions = {
-      from: `"Room Finder" <${process.env.EMAIL_USER || "no-reply@roomfinder237.com"}>`,
+      from: `"Room Finder" <${
+        process.env.EMAIL_USER || "no-reply@roomfinder237.com"
+      }>`,
       to: email,
       subject: "Welcome to Room Finder!",
       html: `
@@ -207,7 +216,7 @@ const sendWelcomeEmail = async (email, firstName) => {
             <h2>Welcome ${firstName}!</h2>
             <p>Congratulations! Your email has been successfully verified. You're now ready to explore amazing accommodations with Room Finder.</p>
             <div style="text-align: center; margin: 30px 0;">
-              <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}" 
+              <a href="${process.env.FRONTEND_URL || "http://localhost:3000"}" 
                  style="background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
                 Start Exploring
               </a>
@@ -229,9 +238,9 @@ const sendWelcomeEmail = async (email, firstName) => {
     };
 
     await sendEmailWithRetry(mailOptions);
-    console.log('Welcome email sent successfully to:', email);
+    console.log("Welcome email sent successfully to:", email);
   } catch (error) {
-    console.error('Error sending welcome email:', error);
+    console.error("Error sending welcome email:", error);
     throw error;
   }
 };
@@ -240,16 +249,20 @@ const sendWelcomeEmail = async (email, firstName) => {
 const sendEmail = async (to, subject, html, from = null) => {
   try {
     const mailOptions = {
-      from: from || `"Room Finder" <${process.env.EMAIL_USER || "no-reply@roomfinder237.com"}>`,
+      from:
+        from ||
+        `"Room Finder" <${
+          process.env.EMAIL_USER || "no-reply@roomfinder237.com"
+        }>`,
       to: to,
       subject: subject,
       html: html,
     };
 
     await sendEmailWithRetry(mailOptions);
-    console.log('Email sent successfully to:', to);
+    console.log("Email sent successfully to:", to);
   } catch (error) {
-    console.error('Error sending email:', error);
+    console.error("Error sending email:", error);
     throw error;
   }
 };
@@ -259,18 +272,21 @@ const testEmailConfiguration = async () => {
   try {
     const testTransporter = createTransporter();
     await testTransporter.verify();
-    console.log('✅ Primary SMTP configuration is working');
+    console.log("✅ Primary SMTP configuration is working");
     return true;
   } catch (error) {
-    console.error('❌ Primary SMTP configuration failed:', error.message);
-    
+    console.error("❌ Primary SMTP configuration failed:", error.message);
+
     try {
       const fallbackTransporter = createFallbackTransporter();
       await fallbackTransporter.verify();
-      console.log('✅ Fallback SMTP configuration is working');
+      console.log("✅ Fallback SMTP configuration is working");
       return true;
     } catch (fallbackError) {
-      console.error('❌ Fallback SMTP configuration also failed:', fallbackError.message);
+      console.error(
+        "❌ Fallback SMTP configuration also failed:",
+        fallbackError.message
+      );
       return false;
     }
   }
@@ -283,5 +299,5 @@ module.exports = {
   sendEmail,
   testEmailConfiguration,
   createTransporter,
-  createFallbackTransporter
+  createFallbackTransporter,
 };
