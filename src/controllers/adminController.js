@@ -1250,6 +1250,77 @@ const resetHostCommission = async (req, res) => {
   }
 };
 
+/**
+ * Get all withdrawals (admin only)
+ */
+const getAllWithdrawals = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status, userId } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const where = {
+      type: "WITHDRAWAL",
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (userId) {
+      where.userId = userId;
+    }
+
+    const [withdrawals, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where,
+        include: {
+          user: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+              role: true,
+            },
+          },
+          wallet: {
+            select: {
+              id: true,
+              balance: true,
+              currency: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: parseInt(limit),
+      }),
+      prisma.transaction.count({ where }),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        withdrawals,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total,
+          pages: Math.ceil(total / parseInt(limit)),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Get all withdrawals error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get withdrawals",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getAllUsers,
@@ -1269,4 +1340,5 @@ module.exports = {
   setHostCustomCommission,
   getHostCommission,
   resetHostCommission,
+  getAllWithdrawals,
 };

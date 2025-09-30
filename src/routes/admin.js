@@ -60,4 +60,7 @@ router.put(
 );
 router.delete("/hosts/:hostId/commission", adminController.resetHostCommission);
 
+// Withdrawal Management
+router.get("/withdrawals", adminController.getAllWithdrawals);
+
 module.exports = router;
