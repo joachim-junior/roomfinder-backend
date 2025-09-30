@@ -601,7 +601,15 @@ const sendSystemNotification = async (req, res) => {
     for (const user of users) {
       try {
         if (type === "EMAIL") {
-          await notificationService.sendEmail(user.email, title, body);
+          // Send email non-blocking
+          notificationService
+            .sendEmail(user.email, title, body)
+            .catch((err) => {
+              console.error(
+                `Broadcast email to ${user.email} failed:`,
+                err && err.message ? err.message : err
+              );
+            });
         } else if (type === "PUSH") {
           await notificationService.sendPushNotification(user.id, title, body);
         }

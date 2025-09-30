@@ -612,7 +612,13 @@ class WalletService {
         type === "CREDIT" ? "+" : "-"
       }${amount} XAF - ${description}`;
 
-      await notificationService.sendEmail(user.email, title, body);
+      // Send email notification (non-blocking)
+      notificationService.sendEmail(user.email, title, body).catch((err) => {
+        console.error(
+          "Wallet notification email failed:",
+          err && err.message ? err.message : err
+        );
+      });
 
       // Send push notification
       await notificationService.sendPushNotification(userId, title, body);
@@ -626,19 +632,33 @@ class WalletService {
    */
   async sendRefundNotifications(booking, refundAmount, reason) {
     try {
-      // Notify guest
-      await notificationService.sendEmail(
-        booking.guest.email,
-        "Refund Processed",
-        `Your refund of ${refundAmount} XAF has been processed for booking ${booking.id}. Reason: ${reason}`
-      );
+      // Notify guest (non-blocking)
+      notificationService
+        .sendEmail(
+          booking.guest.email,
+          "Refund Processed",
+          `Your refund of ${refundAmount} XAF has been processed for booking ${booking.id}. Reason: ${reason}`
+        )
+        .catch((err) => {
+          console.error(
+            "Refund notification to guest failed:",
+            err && err.message ? err.message : err
+          );
+        });
 
-      // Notify host
-      await notificationService.sendEmail(
-        booking.property.host.email,
-        "Refund Processed",
-        `A refund of ${refundAmount} XAF has been processed for booking ${booking.id}. Reason: ${reason}`
-      );
+      // Notify host (non-blocking)
+      notificationService
+        .sendEmail(
+          booking.property.host.email,
+          "Refund Processed",
+          `A refund of ${refundAmount} XAF has been processed for booking ${booking.id}. Reason: ${reason}`
+        )
+        .catch((err) => {
+          console.error(
+            "Refund notification to host failed:",
+            err && err.message ? err.message : err
+          );
+        });
     } catch (error) {
       console.error("Send refund notifications error:", error);
     }

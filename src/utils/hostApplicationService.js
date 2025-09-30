@@ -62,8 +62,13 @@ class HostApplicationService {
         },
       });
 
-      // Send application confirmation email
-      await sendHostApplicationEmail(user.email, user.firstName);
+      // Send application confirmation email (non-blocking)
+      sendHostApplicationEmail(user.email, user.firstName).catch((err) => {
+        console.error(
+          "sendHostApplicationEmail failed:",
+          err && err.message ? err.message : err
+        );
+      });
 
       // Send notification to admins (you can implement this)
       await this.notifyAdminsOfNewApplication(updatedUser);
@@ -284,8 +289,13 @@ class HostApplicationService {
         },
       });
 
-      // Send approval email
-      await sendHostApprovalEmail(user.email, user.firstName);
+      // Send approval email (non-blocking)
+      sendHostApprovalEmail(user.email, user.firstName).catch((err) => {
+        console.error(
+          "sendHostApprovalEmail failed:",
+          err && err.message ? err.message : err
+        );
+      });
 
       // Create notification for user
       await prisma.notification.create({
@@ -338,8 +348,15 @@ class HostApplicationService {
         },
       });
 
-      // Send rejection email
-      await sendHostRejectionEmail(user.email, user.firstName, rejectionReason);
+      // Send rejection email (non-blocking)
+      sendHostRejectionEmail(user.email, user.firstName, rejectionReason).catch(
+        (err) => {
+          console.error(
+            "sendHostRejectionEmail failed:",
+            err && err.message ? err.message : err
+          );
+        }
+      );
 
       // Create notification for user
       await prisma.notification.create({

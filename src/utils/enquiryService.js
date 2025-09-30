@@ -106,13 +106,18 @@ class EnquiryService {
         },
       });
 
-      // Send email notification to host
-      await sendEnquiryNotificationEmail(
+      // Send email notification to host (non-blocking)
+      sendEnquiryNotificationEmail(
         property.host.email,
         property.host.firstName,
         enquiry,
         property
-      );
+      ).catch((err) => {
+        console.error(
+          "sendEnquiryNotificationEmail failed:",
+          err && err.message ? err.message : err
+        );
+      });
 
       // Create notification for host
       await notificationService.createNotification({
@@ -371,13 +376,18 @@ class EnquiryService {
         },
       });
 
-      // Send email notification to guest
-      await sendEnquiryResponseEmail(
+      // Send email notification to guest (non-blocking)
+      sendEnquiryResponseEmail(
         enquiry.guest.email,
         enquiry.guest.firstName,
         updatedEnquiry,
         enquiry.property
-      );
+      ).catch((err) => {
+        console.error(
+          "sendEnquiryResponseEmail failed:",
+          err && err.message ? err.message : err
+        );
+      });
 
       // Create notification for guest
       await notificationService.createNotification({

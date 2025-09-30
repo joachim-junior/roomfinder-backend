@@ -93,17 +93,28 @@ class BookingService {
         },
       });
 
-      // Send confirmation emails
-      await sendBookingConfirmationEmail(
+      // Send confirmation emails (non-blocking)
+      sendBookingConfirmationEmail(
         booking.guest.email,
         booking.guest.firstName,
         booking
-      );
-      await sendBookingNotificationEmail(
+      ).catch((err) => {
+        console.error(
+          "sendBookingConfirmationEmail failed:",
+          err && err.message ? err.message : err
+        );
+      });
+
+      sendBookingNotificationEmail(
         booking.property.host.email,
         booking.property.host.firstName,
         booking
-      );
+      ).catch((err) => {
+        console.error(
+          "sendBookingNotificationEmail failed:",
+          err && err.message ? err.message : err
+        );
+      });
 
       return {
         ...booking,

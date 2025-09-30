@@ -394,8 +394,13 @@ const verifyEmail = async (req, res) => {
       },
     });
 
-    // Send welcome email
-    await sendWelcomeEmail(user.email, user.firstName);
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email, user.firstName).catch((err) => {
+      console.error(
+        "sendWelcomeEmail failed:",
+        err && err.message ? err.message : err
+      );
+    });
 
     res.json({
       message: "Email verified successfully",
@@ -448,8 +453,13 @@ const requestPasswordReset = async (req, res) => {
       },
     });
 
-    // Send reset email
-    await sendPasswordResetEmail(email, resetToken, user.firstName);
+    // Send reset email (non-blocking)
+    sendPasswordResetEmail(email, resetToken, user.firstName).catch((err) => {
+      console.error(
+        "sendPasswordResetEmail failed:",
+        err && err.message ? err.message : err
+      );
+    });
 
     res.json({
       message:
@@ -563,8 +573,15 @@ const resendVerification = async (req, res) => {
       },
     });
 
-    // Send verification email
-    await sendVerificationEmail(email, user.firstName, verificationToken);
+    // Send verification email (non-blocking)
+    sendVerificationEmail(email, user.firstName, verificationToken).catch(
+      (err) => {
+        console.error(
+          "sendVerificationEmail failed:",
+          err && err.message ? err.message : err
+        );
+      }
+    );
 
     res.json({
       message: "Verification email sent successfully",
