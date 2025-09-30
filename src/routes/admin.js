@@ -52,4 +52,12 @@ router.put(
   adminController.updateAdminPreferences
 );
 
+// Host Commission Management
+router.get("/hosts/:hostId/commission", adminController.getHostCommission);
+router.put(
+  "/hosts/:hostId/commission",
+  adminController.setHostCustomCommission
+);
+router.delete("/hosts/:hostId/commission", adminController.resetHostCommission);
+
 module.exports = router;

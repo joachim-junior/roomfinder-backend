@@ -123,7 +123,8 @@ const createBooking = async (req, res) => {
     const revenueService = require("../utils/revenueService");
     const feeCalculation = await revenueService.calculateBookingFees(
       totalPrice,
-      property.currency
+      property.currency,
+      property.hostId
     );
 
     // Create booking
@@ -775,7 +776,8 @@ const handlePaymentWebhook = async (req, res) => {
       const revenueService = require("../utils/revenueService");
       const feeCalculation = await revenueService.calculateBookingFees(
         booking.property.price,
-        "XAF"
+        "XAF",
+        booking.property.hostId
       );
 
       // Credit host wallet (original amount minus host fee)
@@ -1129,7 +1131,8 @@ const calculateBookingFees = async (req, res) => {
     const revenueService = require("../utils/revenueService");
     const feeCalculation = await revenueService.calculateBookingFees(
       baseAmount,
-      property.currency
+      property.currency,
+      property.hostId
     );
 
     res.json({
@@ -1249,14 +1252,16 @@ const hasUserBookedProperty = async (req, res) => {
           id: property.id,
           title: property.title,
         },
-        latestBooking: hasBooked ? {
-          id: booking.id,
-          status: booking.status,
-          checkIn: booking.checkIn,
-          checkOut: booking.checkOut,
-          totalPrice: booking.totalPrice,
-          createdAt: booking.createdAt,
-        } : null,
+        latestBooking: hasBooked
+          ? {
+              id: booking.id,
+              status: booking.status,
+              checkIn: booking.checkIn,
+              checkOut: booking.checkOut,
+              totalPrice: booking.totalPrice,
+              createdAt: booking.createdAt,
+            }
+          : null,
       },
     });
   } catch (error) {

@@ -9,9 +9,17 @@ class BookingService {
   // Create a new booking with revenue calculation
   async createBooking(bookingData, userId) {
     try {
-      // Calculate fees for the booking
+      // Get property to fetch hostId for custom commission
+      const property = await prisma.property.findUnique({
+        where: { id: bookingData.propertyId },
+        select: { hostId: true },
+      });
+
+      // Calculate fees for the booking (with hostId for custom rates)
       const fees = await revenueService.calculateBookingFees(
-        bookingData.totalPrice
+        bookingData.totalPrice,
+        "XAF",
+        property ? property.hostId : null
       );
 
       // Create the booking

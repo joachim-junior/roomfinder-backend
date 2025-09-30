@@ -1055,6 +1055,201 @@ const updateAdminPreferences = async (req, res) => {
   }
 };
 
+/**
+ * Set custom commission rate for a host
+ */
+const setHostCustomCommission = async (req, res) => {
+  try {
+    const { hostId } = req.params;
+    const { commissionRate, commissionMin, commissionMax, enabled } = req.body;
+
+    // Validate host exists and is a host
+    const host = await prisma.user.findUnique({
+      where: { id: hostId },
+      select: {
+        id: true,
+        role: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    if (!host) {
+      return res.status(404).json({
+        success: false,
+        message: "Host not found",
+      });
+    }
+
+    if (host.role !== "HOST") {
+      return res.status(400).json({
+        success: false,
+        message: "User is not a host",
+      });
+    }
+
+    // Validate commission rate
+    if (
+      commissionRate !== undefined &&
+      (commissionRate < 0 || commissionRate > 100)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Commission rate must be between 0 and 100",
+      });
+    }
+
+    // Update host with custom commission
+    const updatedHost = await prisma.user.update({
+      where: { id: hostId },
+      data: {
+        customCommissionRate:
+          commissionRate !== undefined ? commissionRate : undefined,
+        customCommissionMin:
+          commissionMin !== undefined ? commissionMin : undefined,
+        customCommissionMax:
+          commissionMax !== undefined ? commissionMax : undefined,
+        useCustomCommission:
+          enabled !== undefined
+            ? enabled
+            : commissionRate !== undefined
+            ? true
+            : undefined,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        customCommissionRate: true,
+        customCommissionMin: true,
+        customCommissionMax: true,
+        useCustomCommission: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Host custom commission updated successfully",
+      data: updatedHost,
+    });
+  } catch (error) {
+    console.error("Set host custom commission error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update host commission",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Get host commission settings
+ */
+const getHostCommission = async (req, res) => {
+  try {
+    const { hostId } = req.params;
+
+    const host = await prisma.user.findUnique({
+      where: { id: hostId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        role: true,
+        customCommissionRate: true,
+        customCommissionMin: true,
+        customCommissionMax: true,
+        useCustomCommission: true,
+      },
+    });
+
+    if (!host) {
+      return res.status(404).json({
+        success: false,
+        message: "Host not found",
+      });
+    }
+
+    // Get global config for reference
+    const revenueService = require("../utils/revenueService");
+    const globalConfig = await revenueService.getActiveRevenueConfig();
+
+    res.json({
+      success: true,
+      data: {
+        host: {
+          id: host.id,
+          name: `${host.firstName} ${host.lastName}`,
+          email: host.email,
+        },
+        customCommission: {
+          enabled: host.useCustomCommission,
+          rate: host.customCommissionRate,
+          min: host.customCommissionMin,
+          max: host.customCommissionMax,
+        },
+        globalCommission: {
+          rate: globalConfig.hostServiceFeePercent,
+          min: globalConfig.hostServiceFeeMin,
+          max: globalConfig.hostServiceFeeMax,
+        },
+        activeRate:
+          host.useCustomCommission && host.customCommissionRate !== null
+            ? host.customCommissionRate
+            : globalConfig.hostServiceFeePercent,
+      },
+    });
+  } catch (error) {
+    console.error("Get host commission error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get host commission",
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * Reset host to global commission rate
+ */
+const resetHostCommission = async (req, res) => {
+  try {
+    const { hostId } = req.params;
+
+    const updatedHost = await prisma.user.update({
+      where: { id: hostId },
+      data: {
+        useCustomCommission: false,
+        customCommissionRate: null,
+        customCommissionMin: null,
+        customCommissionMax: null,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: "Host commission reset to global rate",
+      data: updatedHost,
+    });
+  } catch (error) {
+    console.error("Reset host commission error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reset host commission",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getDashboardStats,
   getAllUsers,
@@ -1071,4 +1266,7 @@ module.exports = {
   getWalletStatistics,
   getAdminPreferences,
   updateAdminPreferences,
+  setHostCustomCommission,
+  getHostCommission,
+  resetHostCommission,
 };

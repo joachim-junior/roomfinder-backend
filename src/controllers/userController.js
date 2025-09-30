@@ -540,7 +540,8 @@ const getGuestDashboardStats = async (req, res) => {
         try {
           const fees = await revenueService.calculateBookingFees(
             booking.totalPrice,
-            "XAF" // Default currency
+            "XAF", // Default currency
+            userId // Host ID for custom commission
           );
 
           totalGrossEarnings += booking.totalPrice;
@@ -576,7 +577,8 @@ const getGuestDashboardStats = async (req, res) => {
         try {
           const fees = await revenueService.calculateBookingFees(
             booking.totalPrice,
-            "XAF" // Default currency
+            "XAF", // Default currency
+            userId // Host ID for custom commission
           );
           netEarningsLast30Days += fees.netAmountForHost;
         } catch (error) {
