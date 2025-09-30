@@ -1,6 +1,12 @@
 const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
-// Connection pool to reuse connections
+// Initialize Resend client
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
+
+// Connection pool to reuse connections (SMTP fallback)
 let transporter = null;
 
 const createTransporter = () => {
@@ -72,13 +78,44 @@ const createFallbackTransporter = () => {
   return nodemailer.createTransport(fallbackConfig);
 };
 
-// Enhanced email sending with retry logic
+// Enhanced email sending with Resend (primary) and SMTP (fallback)
 const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
   let lastError = null;
 
+  // Try Resend first if configured
+  if (resend) {
+    try {
+      console.log("Sending email via Resend...");
+
+      // Use verified domain if set, otherwise use Resend's default domain
+      const fromEmail = process.env.RESEND_VERIFIED_DOMAIN
+        ? `Room Finder <no-reply@${process.env.RESEND_VERIFIED_DOMAIN}>`
+        : "Room Finder <onboarding@resend.dev>";
+
+      const { data, error } = await resend.emails.send({
+        from: mailOptions.from || fromEmail,
+        to: [mailOptions.to],
+        subject: mailOptions.subject,
+        html: mailOptions.html,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      console.log("Email sent successfully via Resend:", data.id);
+      return { messageId: data.id };
+    } catch (error) {
+      console.error("Resend failed, falling back to SMTP:", error.message);
+      lastError = error;
+      // Continue to SMTP fallback
+    }
+  }
+
+  // Fallback to SMTP
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`Email send attempt ${attempt}/${maxRetries}`);
+      console.log(`Email send attempt ${attempt}/${maxRetries} (SMTP)`);
 
       // Try primary transporter first
       let currentTransporter = createTransporter();
