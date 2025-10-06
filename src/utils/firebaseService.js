@@ -66,37 +66,31 @@ class FirebaseService {
 
   /**
    * Register device token for a user
+   * Uses upsert to handle cases where:
+   * - Same token is re-registered by same user (update)
+   * - Same token is registered by different user (update userId)
+   * - New token is registered (create)
    */
   async registerDeviceToken(userId, deviceToken, platform = "android") {
     try {
-      const existingToken = await prisma.deviceToken.findFirst({
+      // Use upsert to handle duplicate tokens gracefully
+      await prisma.deviceToken.upsert({
         where: {
-          userId,
           token: deviceToken,
         },
+        update: {
+          userId: userId,
+          platform: platform,
+          isActive: true,
+          lastUsed: new Date(),
+        },
+        create: {
+          userId: userId,
+          token: deviceToken,
+          platform: platform,
+          isActive: true,
+        },
       });
-
-      if (existingToken) {
-        // Update existing token
-        await prisma.deviceToken.update({
-          where: { id: existingToken.id },
-          data: {
-            platform,
-            lastUsed: new Date(),
-            isActive: true,
-          },
-        });
-      } else {
-        // Create new token
-        await prisma.deviceToken.create({
-          data: {
-            userId,
-            token: deviceToken,
-            platform,
-            isActive: true,
-          },
-        });
-      }
 
       return { success: true, message: "Device token registered successfully" };
     } catch (error) {
@@ -206,7 +200,7 @@ class FirebaseService {
         console.error("Firebase messaging error:", error.message);
         return {
           success: false,
-          message: "Firebase messaging service not available: " + error.message
+          message: "Firebase messaging service not available: " + error.message,
         };
       }
 

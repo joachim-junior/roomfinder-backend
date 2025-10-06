@@ -454,7 +454,7 @@ const requestPasswordReset = async (req, res) => {
     });
 
     // Send reset email (non-blocking)
-    sendPasswordResetEmail(email, resetToken, user.firstName).catch((err) => {
+    sendPasswordResetEmail(email, user.firstName, resetToken).catch((err) => {
       console.error(
         "sendPasswordResetEmail failed:",
         err && err.message ? err.message : err
