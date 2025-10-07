@@ -17,10 +17,12 @@ class HostApplicationService {
         throw new Error("User not found");
       }
 
-      if (user.role !== "GUEST") {
+      // Only GUEST and HOST (with REJECTED status) can apply/reapply
+      if (user.role !== "GUEST" && user.role !== "HOST") {
         throw new Error("Only guests can apply to become hosts");
       }
 
+      // Check application status
       if (user.hostApprovalStatus === "PENDING") {
         throw new Error("You already have a pending host application");
       }
@@ -29,17 +31,13 @@ class HostApplicationService {
         throw new Error("You are already an approved host");
       }
 
-      if (user.hostApprovalStatus === "REJECTED") {
-        throw new Error(
-          "Your previous host application was rejected. Please contact support to reapply."
-        );
-      }
-
       if (user.hostApprovalStatus === "SUSPENDED") {
         throw new Error(
           "Your host account has been suspended. Please contact support for more information."
         );
       }
+
+      // REJECTED status is allowed to reapply (no error thrown)
 
       // Update user with host application
       const updatedUser = await prisma.user.update({

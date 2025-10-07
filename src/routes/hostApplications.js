@@ -46,11 +46,11 @@ const validateSuspension = [
 // User routes (require authentication)
 router.use(authenticateToken);
 
-// Submit host application (GUEST only)
+// Submit host application (GUEST or HOST with REJECTED status can apply/reapply)
 router.post(
   "/apply",
   validateHostApplication,
-  requireRole(["GUEST"]),
+  requireRole(["GUEST", "HOST"]),
   hostApplicationController.submitApplication
 );
 

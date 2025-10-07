@@ -304,6 +304,161 @@ const sendEmail = async (to, subject, html, from = null) => {
   }
 };
 
+/**
+ * Send host application confirmation email
+ */
+const sendHostApplicationEmail = async (email, firstName) => {
+  const subject = "Host Application Received - Room Finder";
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #1976D2; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .timeline { background-color: white; padding: 20px; border-left: 4px solid #1976D2; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="header"><h1>Host Application Received!</h1></div>
+      <div class="content">
+        <p>Hello ${firstName},</p>
+        <p>Thank you for applying to become a host on Room Finder! We have received your application and our team is currently reviewing it.</p>
+        <div class="timeline">
+          <h3>What Happens Next?</h3>
+          <ol>
+            <li><strong>Review Process</strong> - Our team will review your application (typically 1-3 business days)</li>
+            <li><strong>Verification</strong> - We may contact you for additional information if needed</li>
+            <li><strong>Decision</strong> - You'll receive an email with our decision</li>
+            <li><strong>Get Started</strong> - Once approved, you can immediately start listing your properties!</li>
+          </ol>
+        </div>
+        <p>If you have any questions, please contact our support team.</p>
+        <p>Best regards,<br>The Room Finder Team</p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await sendEmail(email, subject, html);
+    console.log("Host application email sent to:", email);
+  } catch (error) {
+    console.error("Error sending host application email:", error);
+    throw error;
+  }
+};
+
+/**
+ * Send host approval email
+ */
+const sendHostApprovalEmail = async (email, firstName, notes = "") => {
+  const subject =
+    "Congratulations! Your Host Application Has Been Approved - Room Finder";
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .next-steps { background-color: white; padding: 20px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="header"><h1>🎉 Congratulations!</h1></div>
+      <div class="content">
+        <p>Hello ${firstName},</p>
+        <p><strong>Great news! Your host application has been approved!</strong></p>
+        <p>Welcome to the Room Finder hosting community! You can now start listing your properties and earning money.</p>
+        ${
+          notes
+            ? `<div class="next-steps"><p><strong>Note from our team:</strong></p><p>${notes}</p></div>`
+            : ""
+        }
+        <div class="next-steps">
+          <h3>Next Steps:</h3>
+          <ol>
+            <li>Create your first property listing</li>
+            <li>Add photos and details</li>
+            <li>Set your pricing and availability</li>
+            <li>Start receiving bookings!</li>
+          </ol>
+        </div>
+        <p>We're excited to have you on board!</p>
+        <p>Best regards,<br>The Room Finder Team</p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await sendEmail(email, subject, html);
+    console.log("Host approval email sent to:", email);
+  } catch (error) {
+    console.error("Error sending host approval email:", error);
+    throw error;
+  }
+};
+
+/**
+ * Send host rejection email
+ */
+const sendHostRejectionEmail = async (email, firstName, reason) => {
+  const subject = "Update on Your Host Application - Room Finder";
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #FF9800; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .reason-box { background-color: white; padding: 20px; border-left: 4px solid #FF9800; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      <div class="header"><h1>Host Application Update</h1></div>
+      <div class="content">
+        <p>Hello ${firstName},</p>
+        <p>Thank you for your interest in becoming a host on Room Finder. After careful review, we are unable to approve your host application at this time.</p>
+        <div class="reason-box">
+          <p><strong>Reason:</strong></p>
+          <p>${reason}</p>
+        </div>
+        <p>You can contact our support team for more information or reapply once you've addressed the concerns.</p>
+        <p>Best regards,<br>The Room Finder Team</p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await sendEmail(email, subject, html);
+    console.log("Host rejection email sent to:", email);
+  } catch (error) {
+    console.error("Error sending host rejection email:", error);
+    throw error;
+  }
+};
+
 // Test email configuration
 const testEmailConfiguration = async () => {
   try {
@@ -333,6 +488,9 @@ module.exports = {
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendWelcomeEmail,
+  sendHostApplicationEmail,
+  sendHostApprovalEmail,
+  sendHostRejectionEmail,
   sendEmail,
   testEmailConfiguration,
   createTransporter,
