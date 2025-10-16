@@ -1,5 +1,8 @@
 const { prisma, handleDatabaseError } = require("./database");
-const { sendHostApprovalEmail, sendHostRejectionEmail } = require("./emailService");
+const {
+    sendHostApprovalEmail,
+    sendHostRejectionEmail,
+} = require("./emailService");
 const firebaseService = require("./firebaseService");
 
 class HostOnboardingService {
@@ -174,7 +177,7 @@ class HostOnboardingService {
                 prisma.hostProfile.findUnique({ where: { userId } }),
                 prisma.hostVerification.findUnique({ where: { userId } }),
                 prisma.user.findUnique({
-                    where: { userId },
+                    where: { id: userId },
                     select: {
                         id: true,
                         email: true,
@@ -195,9 +198,9 @@ class HostOnboardingService {
                     data: profile,
                 },
                 verification: {
-                    idVerification: verification?.idVerificationStatus || "PENDING",
-                    ownershipVerification: verification?.ownershipVerificationStatus || "NOT_REQUIRED",
-                    overall: verification?.overallVerificationStatus || "PENDING",
+                    idVerification: verification ? .idVerificationStatus || "PENDING",
+                    ownershipVerification: verification ? .ownershipVerificationStatus || "NOT_REQUIRED",
+                    overall: verification ? .overallVerificationStatus || "PENDING",
                     data: verification,
                 },
                 completionPercentage: this.calculateCompletionPercentage(
@@ -222,16 +225,16 @@ class HostOnboardingService {
         let total = 4; // Total onboarding steps
 
         // Step 1: Profile completed
-        if (profile?.completedAt) completed++;
+        if (profile ? .completedAt) completed++;
 
         // Step 2: ID front uploaded
-        if (verification?.idFrontImage) completed++;
+        if (verification ? .idFrontImage) completed++;
 
         // Step 3: ID back uploaded
-        if (verification?.idBackImage) completed++;
+        if (verification ? .idBackImage) completed++;
 
         // Step 4: Selfie uploaded
-        if (verification?.selfieImage) completed++;
+        if (verification ? .selfieImage) completed++;
 
         return Math.round((completed / total) * 100);
     }
@@ -242,7 +245,7 @@ class HostOnboardingService {
     getNextSteps(profile, verification) {
         const steps = [];
 
-        if (!profile?.completedAt) {
+        if (!profile ? .completedAt) {
             steps.push({
                 step: 1,
                 title: "Complete Host Profile",
@@ -252,9 +255,9 @@ class HostOnboardingService {
             });
         }
 
-        if (!verification?.idFrontImage ||
-            !verification?.idBackImage ||
-            !verification?.selfieImage
+        if (!verification ? .idFrontImage ||
+            !verification ? .idBackImage ||
+            !verification ? .selfieImage
         ) {
             steps.push({
                 step: 2,
@@ -265,7 +268,7 @@ class HostOnboardingService {
             });
         }
 
-        if (verification?.idVerificationStatus === "PENDING") {
+        if (verification ? .idVerificationStatus === "PENDING") {
             steps.push({
                 step: 3,
                 title: "Wait for ID Verification",
@@ -363,23 +366,26 @@ class HostOnboardingService {
             // Send notifications based on decision
             if (decision === "VERIFIED") {
                 // Send approval email
-                sendHostApprovalEmail(user.email, user.firstName, notes).catch((err) => {
-                    console.error("Failed to send host approval email:", err.message);
-                });
+                sendHostApprovalEmail(user.email, user.firstName, notes).catch(
+                    (err) => {
+                        console.error("Failed to send host approval email:", err.message);
+                    }
+                );
 
                 // Send push notification
-                firebaseService.sendPushNotification(
-                    userId,
-                    "🎉 Host Application Approved!",
-                    "Congratulations! You can now list your properties on Room Finder.",
-                    {
-                        type: "HOST_APPROVED",
-                        userId: userId,
-                        notes: notes,
-                    }
-                ).catch((err) => {
-                    console.error("Failed to send push notification:", err.message);
-                });
+                firebaseService
+                    .sendPushNotification(
+                        userId,
+                        "🎉 Host Application Approved!",
+                        "Congratulations! You can now list your properties on Room Finder.", {
+                            type: "HOST_APPROVED",
+                            userId: userId,
+                            notes: notes,
+                        }
+                    )
+                    .catch((err) => {
+                        console.error("Failed to send push notification:", err.message);
+                    });
 
                 // Create in-app notification
                 await prisma.notification.create({
@@ -398,23 +404,26 @@ class HostOnboardingService {
                 });
             } else {
                 // Send rejection email
-                sendHostRejectionEmail(user.email, user.firstName, notes).catch((err) => {
-                    console.error("Failed to send host rejection email:", err.message);
-                });
+                sendHostRejectionEmail(user.email, user.firstName, notes).catch(
+                    (err) => {
+                        console.error("Failed to send host rejection email:", err.message);
+                    }
+                );
 
                 // Send push notification
-                firebaseService.sendPushNotification(
-                    userId,
-                    "Host Application Update",
-                    "Your host application requires attention. Please check your email for details.",
-                    {
-                        type: "HOST_REJECTED",
-                        userId: userId,
-                        reason: notes,
-                    }
-                ).catch((err) => {
-                    console.error("Failed to send push notification:", err.message);
-                });
+                firebaseService
+                    .sendPushNotification(
+                        userId,
+                        "Host Application Update",
+                        "Your host application requires attention. Please check your email for details.", {
+                            type: "HOST_REJECTED",
+                            userId: userId,
+                            reason: notes,
+                        }
+                    )
+                    .catch((err) => {
+                        console.error("Failed to send push notification:", err.message);
+                    });
 
                 // Create in-app notification
                 await prisma.notification.create({
