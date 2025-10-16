@@ -198,9 +198,14 @@ class HostOnboardingService {
                     data: profile,
                 },
                 verification: {
-                    idVerification: verification ? .idVerificationStatus || "PENDING",
-                    ownershipVerification: verification ? .ownershipVerificationStatus || "NOT_REQUIRED",
-                    overall: verification ? .overallVerificationStatus || "PENDING",
+                    idVerification:
+                        (verification && verification.idVerificationStatus) || "PENDING",
+                    ownershipVerification:
+                        (verification && verification.ownershipVerificationStatus) ||
+                        "NOT_REQUIRED",
+                    overall:
+                        (verification && verification.overallVerificationStatus) ||
+                        "PENDING",
                     data: verification,
                 },
                 completionPercentage: this.calculateCompletionPercentage(
@@ -225,16 +230,16 @@ class HostOnboardingService {
         let total = 4; // Total onboarding steps
 
         // Step 1: Profile completed
-        if (profile ? .completedAt) completed++;
+        if (profile && profile.completedAt) completed++;
 
         // Step 2: ID front uploaded
-        if (verification ? .idFrontImage) completed++;
+        if (verification && verification.idFrontImage) completed++;
 
         // Step 3: ID back uploaded
-        if (verification ? .idBackImage) completed++;
+        if (verification && verification.idBackImage) completed++;
 
         // Step 4: Selfie uploaded
-        if (verification ? .selfieImage) completed++;
+        if (verification && verification.selfieImage) completed++;
 
         return Math.round((completed / total) * 100);
     }
@@ -245,7 +250,7 @@ class HostOnboardingService {
     getNextSteps(profile, verification) {
         const steps = [];
 
-        if (!profile ? .completedAt) {
+        if (!(profile && profile.completedAt)) {
             steps.push({
                 step: 1,
                 title: "Complete Host Profile",
@@ -255,9 +260,9 @@ class HostOnboardingService {
             });
         }
 
-        if (!verification ? .idFrontImage ||
-            !verification ? .idBackImage ||
-            !verification ? .selfieImage
+        if (!(verification && verification.idFrontImage) ||
+            !(verification && verification.idBackImage) ||
+            !(verification && verification.selfieImage)
         ) {
             steps.push({
                 step: 2,
@@ -268,7 +273,7 @@ class HostOnboardingService {
             });
         }
 
-        if (verification ? .idVerificationStatus === "PENDING") {
+        if (verification && verification.idVerificationStatus === "PENDING") {
             steps.push({
                 step: 3,
                 title: "Wait for ID Verification",
