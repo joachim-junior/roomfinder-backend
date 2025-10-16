@@ -27,7 +27,9 @@ router.get("/withdrawals", walletController.getWithdrawalHistory);
 // Process refund for booking
 router.post("/refund/:bookingId", walletController.processRefund);
 
-// Withdraw money from wallet
-router.post("/withdraw", walletController.withdrawFromWallet);
+// Note: Direct withdrawals are now disabled
+// Hosts must use the manual payout request system:
+// POST /api/v1/payout-requests/request
+// This provides better fraud protection and admin control
 
 module.exports = router;

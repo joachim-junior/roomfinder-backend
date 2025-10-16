@@ -54,6 +54,9 @@ model User {
   transactions             Transaction[]
   notificationPreferences  UserNotificationPreferences?
   wallet                   Wallet?
+  hostProfile              HostProfile?
+  hostVerification         HostVerification?
+  payoutRequests           PayoutRequest[]
 
   @@map("users")
 }
@@ -615,4 +618,110 @@ enum SupportStatus {
   RESOLVED
   CLOSED
   ESCALATED
+}
+
+// Enhanced Host Onboarding Models
+
+model HostProfile {
+  id                 String   @id @default(cuid())
+  userId             String   @unique
+  fullLegalName      String
+  dateOfBirth        DateTime?
+  nationality        String?
+  residentialAddress String
+  city               String
+  region             String
+  country            String   @default("Cameroon")
+  postalCode         String?
+  alternatePhone     String?
+  emergencyContact   String?
+  emergencyPhone     String?
+  payoutPhoneNumber  String   // Mobile money number for payouts
+  payoutPhoneName    String?  // Name registered on mobile money
+  idType             String?  // NATIONAL_ID, PASSPORT, DRIVERS_LICENSE
+  idNumber           String?
+  idExpiryDate       DateTime?
+  bio                String?
+  languages          String[]
+  hostingSince       DateTime?
+  propertyCount      Int      @default(0)
+  completedAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("host_profiles")
+}
+
+model HostVerification {
+  id                      String             @id @default(cuid())
+  userId                  String             @unique
+  // ID Verification
+  idFrontImage            String?            // URL to ID front image
+  idBackImage             String?            // URL to ID back image
+  selfieImage             String?            // URL to selfie with ID
+  idVerificationStatus    VerificationStatus @default(PENDING)
+  idVerifiedAt            DateTime?
+  idVerifiedBy            String?            // Admin user ID
+  idRejectionReason       String?
+  // Property Ownership Verification
+  ownershipDocuments      String[]           // URLs to property docs (optional)
+  ownershipVerificationStatus VerificationStatus @default(NOT_REQUIRED)
+  ownershipVerifiedAt     DateTime?
+  ownershipVerifiedBy     String?            // Admin user ID
+  ownershipRejectionReason String?
+  // Overall Status
+  overallVerificationStatus VerificationStatus @default(PENDING)
+  verificationCompletedAt DateTime?
+  adminNotes              String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("host_verifications")
+}
+
+model PayoutRequest {
+  id                 String              @id @default(cuid())
+  userId             String
+  amount             Float
+  currency           String              @default("XAF")
+  phoneNumber        String              // Mobile money number
+  paymentMethod      String              @default("MOBILE_MONEY")
+  status             PayoutRequestStatus @default(PENDING)
+  requestedAt        DateTime            @default(now())
+  eligibleAt         DateTime            // 3 days after booking payment
+  approvedAt         DateTime?
+  approvedBy         String?             // Admin user ID
+  rejectedAt         DateTime?
+  rejectedBy         String?             // Admin user ID
+  rejectionReason    String?
+  processedAt        DateTime?
+  transactionId      String?             // Transaction record after processing
+  fapshiTransId      String?             // Fapshi payout transaction ID
+  adminNotes         String?
+  metadata           String?             // JSON: { bookingIds: [], breakdown: {} }
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("payout_requests")
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  NOT_REQUIRED
+  EXPIRED
+}
+
+enum PayoutRequestStatus {
+  PENDING
+  APPROVED
+  PROCESSING
+  COMPLETED
+  REJECTED
+  CANCELLED
+  FAILED
 }
