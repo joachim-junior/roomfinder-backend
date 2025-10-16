@@ -384,7 +384,8 @@ class PayoutRequestService {
                 medium: payoutRequest.paymentMethod === "ORANGE_MONEY" ?
                     "orange money" :
                     "mobile money",
-                name: user.hostProfile ? .fullLegalName ||
+                name:
+                    (user.hostProfile && user.hostProfile.fullLegalName) ||
                     `${user.firstName} ${user.lastName}`,
                 email: user.email,
                 userId: user.id,
@@ -406,7 +407,9 @@ class PayoutRequestService {
                     where: { id: payoutRequest.id },
                     data: {
                         status: "FAILED",
-                        adminNotes: fapshiResponse ? .message || "Fapshi payout failed",
+                        adminNotes:
+                            (fapshiResponse && fapshiResponse.message) ||
+                            "Fapshi payout failed",
                     },
                 });
 
@@ -415,7 +418,10 @@ class PayoutRequestService {
                     data: { status: "FAILED" },
                 });
 
-                throw new Error(fapshiResponse ? .message || "Payout processing failed");
+                throw new Error(
+                    (fapshiResponse && fapshiResponse.message) ||
+                    "Payout processing failed"
+                );
             }
 
             // Update with Fapshi transaction ID
