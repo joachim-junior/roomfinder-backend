@@ -42,8 +42,32 @@ class PayoutRequestService {
                     eligibleAmount: 0,
                     lockedAmount: 0,
                     pendingPayouts: 0,
+                    breakdown: {
+                        completedBookings: 0,
+                        totalEarned: 0,
+                        pendingAmount: 0,
+                        eligibleAmount: 0,
+                    },
                 };
             }
+
+            // Get all transactions for this host
+            const transactions = await prisma.transaction.findMany({
+                where: {
+                    walletId: wallet.id,
+                    type: "PAYMENT", // Only payment transactions (earnings from bookings)
+                },
+                include: {
+                    booking: {
+                        select: {
+                            id: true,
+                            checkOut: true,
+                            status: true,
+                        },
+                    },
+                },
+                orderBy: { createdAt: "desc" },
+            });
 
             // Get pending payout requests
             const pendingPayouts = await prisma.payoutRequest.findMany({
@@ -58,14 +82,57 @@ class PayoutRequestService {
                 0
             );
 
-            // Calculate eligible amount (balance minus pending payouts)
-            const eligibleAmount = Math.max(0, wallet.balance - totalPendingPayouts);
+            // Calculate eligible amount based on 3-day rule per booking
+            let eligibleAmount = 0;
+            let pendingAmount = 0;
+            let completedBookings = 0;
+            let totalEarned = 0;
+
+            const recentBookings = [];
+
+            for (const transaction of transactions) {
+                if (transaction.booking && transaction.booking.status === "COMPLETED") {
+                    const bookingCompletedAt = transaction.booking.checkOut;
+                    const isEligible = new Date(bookingCompletedAt) <= threeDaysAgo;
+
+                    totalEarned += transaction.amount;
+                    completedBookings++;
+
+                    if (isEligible) {
+                        eligibleAmount += transaction.amount;
+                    } else {
+                        pendingAmount += transaction.amount;
+                        recentBookings.push({
+                            bookingId: transaction.booking.id,
+                            amount: transaction.amount,
+                            completedAt: bookingCompletedAt,
+                            availableAt: new Date(
+                                new Date(bookingCompletedAt).getTime() + 3 * 24 * 60 * 60 * 1000
+                            ),
+                            status: "PENDING",
+                        });
+                    }
+                }
+            }
+
+            // Subtract pending payouts from eligible amount
+            const finalEligibleAmount = Math.max(
+                0,
+                eligibleAmount - totalPendingPayouts
+            );
 
             return {
                 totalBalance: wallet.balance,
-                eligibleAmount: eligibleAmount,
+                eligibleAmount: finalEligibleAmount,
                 lockedAmount: totalPendingPayouts,
                 pendingPayouts: pendingPayouts.length,
+                breakdown: {
+                    completedBookings,
+                    totalEarned,
+                    pendingAmount,
+                    eligibleAmount: finalEligibleAmount,
+                },
+                recentBookings: recentBookings.slice(0, 10), // Last 10 recent bookings
             };
         } catch (error) {
             console.error("Calculate eligible amount error:", error);
