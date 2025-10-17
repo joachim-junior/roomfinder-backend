@@ -76,6 +76,19 @@ const validateVerificationDecision = [
     .withMessage("Notes must be less than 500 characters"),
 ];
 
+const validatePayoutDetails = [
+    body("payoutPhoneNumber")
+    .notEmpty()
+    .withMessage("Payout phone number is required")
+    .matches(/^(\+237)?6[0-9]{8}$/)
+    .withMessage("Invalid Cameroon phone number format (must start with 6)"),
+    body("payoutPhoneName")
+    .optional()
+    .isString()
+    .isLength({ max: 100 })
+    .withMessage("Payout phone name must be less than 100 characters"),
+];
+
 // Host routes (require HOST or ADMIN role)
 router.use(authenticateToken);
 router.use(requireRole(["HOST", "ADMIN"]));
@@ -107,6 +120,13 @@ router.post(
 
 // Get onboarding status
 router.get("/status", hostOnboardingController.getOnboardingStatus);
+
+// Update payout details
+router.put(
+    "/payout-details",
+    validatePayoutDetails,
+    hostOnboardingController.updatePayoutDetails
+);
 
 // Admin routes
 router.use(requireRole(["ADMIN"]));

@@ -502,6 +502,54 @@ class HostOnboardingService {
     }
 
     /**
+     * Update host payout details
+     */
+    async updatePayoutDetails(userId, payoutData) {
+        try {
+            const { payoutPhoneNumber, payoutPhoneName } = payoutData;
+
+            // Validate required fields
+            if (!payoutPhoneNumber) {
+                throw new Error("Payout phone number is required");
+            }
+
+            // Validate phone number format (Cameroon mobile numbers)
+            const phoneRegex = /^(\+237)?6[0-9]{8}$/;
+            if (!phoneRegex.test(payoutPhoneNumber)) {
+                throw new Error(
+                    "Invalid Cameroon phone number format (must start with 6)"
+                );
+            }
+
+            // Check if host profile exists
+            const existingProfile = await prisma.hostProfile.findUnique({
+                where: { userId },
+            });
+
+            if (!existingProfile) {
+                throw new Error(
+                    "Host profile not found. Please complete your profile first."
+                );
+            }
+
+            // Update payout details
+            const updatedProfile = await prisma.hostProfile.update({
+                where: { userId },
+                data: {
+                    payoutPhoneNumber,
+                    payoutPhoneName: payoutPhoneName || null,
+                    updatedAt: new Date(),
+                },
+            });
+
+            return updatedProfile;
+        } catch (error) {
+            console.error("Update payout details error:", error);
+            throw error;
+        }
+    }
+
+    /**
      * Get all hosts pending verification (Admin)
      */
     async getPendingVerifications(page = 1, limit = 10) {
