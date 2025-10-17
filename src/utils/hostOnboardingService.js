@@ -30,6 +30,9 @@ class HostOnboardingService {
                 idExpiryDate,
                 bio,
                 languages,
+                whatsapp,
+                facebookUrl,
+                instagramUrl,
             } = profileData;
 
             // Validate required fields
@@ -57,6 +60,9 @@ class HostOnboardingService {
                     alternatePhone,
                     emergencyContact,
                     emergencyPhone,
+                    whatsapp,
+                    facebookUrl,
+                    instagramUrl,
                     payoutPhoneNumber,
                     payoutPhoneName,
                     idType,
@@ -80,6 +86,9 @@ class HostOnboardingService {
                     alternatePhone,
                     emergencyContact,
                     emergencyPhone,
+                    whatsapp,
+                    facebookUrl,
+                    instagramUrl,
                     payoutPhoneNumber,
                     payoutPhoneName,
                     idType,

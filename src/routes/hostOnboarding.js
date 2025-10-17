@@ -20,6 +20,19 @@ const validateHostProfile = [
     .withMessage("Address must be less than 200 characters"),
     body("city").notEmpty().withMessage("City is required").isString(),
     body("region").notEmpty().withMessage("Region is required").isString(),
+    body("whatsapp")
+    .notEmpty()
+    .withMessage("WhatsApp number is required")
+    .matches(/^(\+237)?6[0-9]{8}$/)
+    .withMessage("Invalid Cameroon WhatsApp number (must start with 6)"),
+    body("facebookUrl")
+    .optional()
+    .isURL()
+    .withMessage("facebookUrl must be a valid URL"),
+    body("instagramUrl")
+    .optional()
+    .isURL()
+    .withMessage("instagramUrl must be a valid URL"),
     body("payoutPhoneNumber")
     .notEmpty()
     .withMessage("Payout phone number is required")

@@ -80,6 +80,8 @@ model Property {
   maxGuests   Int
   amenities   String[]
   images      String[]
+  facebookUrl String?
+  instagramUrl String?
   isAvailable Boolean           @default(true)
   isVerified  Boolean           @default(false)
   createdAt   DateTime          @default(now())
@@ -636,6 +638,9 @@ model HostProfile {
   alternatePhone     String?
   emergencyContact   String?
   emergencyPhone     String?
+  whatsapp           String   // Mandatory WhatsApp contact for host
+  facebookUrl        String?
+  instagramUrl       String?
   payoutPhoneNumber  String   // Mobile money number for payouts
   payoutPhoneName    String?  // Name registered on mobile money
   idType             String?  // NATIONAL_ID, PASSPORT, DRIVERS_LICENSE
