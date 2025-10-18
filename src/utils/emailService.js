@@ -23,7 +23,7 @@ const getLogoBase64 = () => {
 const getEmailHeader = (title, backgroundColor = "#1976D2") => {
     const logoBase64 = getLogoBase64();
     const logoImg = logoBase64 ?
-        `<img src="data:image/png;base64,${logoBase64}" alt="Room Finder" style="max-width: 200px; height: auto; margin-bottom: 10px;">` :
+        `<img src="data:image/png;base64,${logoBase64}" alt="Room Finder" style="max-width: 200px; height: auto; margin-bottom: 10px; filter: brightness(0) invert(1);">` :
         '<h1 style="margin: 0; font-size: 24px;">Room Finder</h1>';
 
     return `
@@ -185,28 +185,42 @@ const sendVerificationEmail = async(email, firstName, verificationToken) => {
             to: email,
             subject: "Verify Your Email - Room Finder",
             html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #007bff; color: white; padding: 20px; text-align: center;">
-            <h1>Room Finder</h1>
-          </div>
-          <div style="padding: 20px;">
-            <h2>Hello ${firstName}!</h2>
-            <p>Thank you for registering with Room Finder. Please verify your email address to complete your registration.</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${verificationUrl}" 
-                 style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                Verify Email Address
-              </a>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+            .verification-box { background-color: white; padding: 20px; border-left: 4px solid #1976D2; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          ${getEmailHeader("Email Verification", "#1976D2")}
+          <div class="content">
+            <p>Hello ${firstName},</p>
+            <p>Thank you for signing up with Room Finder! Please verify your email address to complete your registration.</p>
+            
+            <div class="verification-box">
+              <h3>Verify Your Email Address</h3>
+              <p>Click the button below to verify your email address:</p>
+              <p style="text-align: center; margin: 20px 0;">
+                <a href="${verificationUrl}" style="background-color: #1976D2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Verify Email Address</a>
+              </p>
+              <p><strong>Or copy and paste this link in your browser:</strong></p>
+              <p style="word-break: break-all; color: #666; font-size: 12px;">${verificationUrl}</p>
             </div>
-            <p>If the button doesn't work, copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #666;">${verificationUrl}</p>
-            <p>This link will expire in 24 hours.</p>
-            <hr style="margin: 30px 0;">
-            <p style="color: #666; font-size: 12px;">
-              If you didn't create an account with Room Finder, please ignore this email.
-            </p>
+            
+            <p>If you didn't create an account with Room Finder, please ignore this email.</p>
+            <p>This verification link will expire in 24 hours.</p>
+            
+            <p>Best regards,<br>The Room Finder Team</p>
           </div>
-        </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+          </div>
+        </body>
+        </html>
       `,
         };
 
@@ -231,28 +245,42 @@ const sendPasswordResetEmail = async(email, firstName, resetToken) => {
             to: email,
             subject: "Reset Your Password - Room Finder",
             html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-          <div style="background-color: #dc3545; color: white; padding: 20px; text-align: center;">
-            <h1>Room Finder</h1>
-          </div>
-          <div style="padding: 20px;">
-            <h2>Hello ${firstName}!</h2>
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+            .reset-box { background-color: white; padding: 20px; border-left: 4px solid #1976D2; margin: 20px 0; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          ${getEmailHeader("Password Reset", "#1976D2")}
+          <div class="content">
+            <p>Hello ${firstName},</p>
             <p>We received a request to reset your password for your Room Finder account. If you made this request, click the button below to reset your password.</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetUrl}" 
-                 style="background-color: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">
-                Reset Password
-              </a>
+            
+            <div class="reset-box">
+              <h3>Reset Your Password</h3>
+              <p>Click the button below to reset your password:</p>
+              <p style="text-align: center; margin: 20px 0;">
+                <a href="${resetUrl}" style="background-color: #1976D2; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Reset Password</a>
+              </p>
+              <p><strong>Or copy and paste this link in your browser:</strong></p>
+              <p style="word-break: break-all; color: #666; font-size: 12px;">${resetUrl}</p>
             </div>
-            <p>If the button doesn't work, copy and paste this link into your browser:</p>
-            <p style="word-break: break-all; color: #666;">${resetUrl}</p>
+            
+            <p>If you didn't request a password reset, please ignore this email. Your password will remain unchanged.</p>
             <p>This link will expire in 1 hour.</p>
-            <hr style="margin: 30px 0;">
-            <p style="color: #666; font-size: 12px;">
-              If you didn't request a password reset, please ignore this email.
-            </p>
+            
+            <p>Best regards,<br>The Room Finder Team</p>
           </div>
-        </div>
+          <div class="footer">
+            <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+          </div>
+        </body>
+        </html>
       `,
         };
 
