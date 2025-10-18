@@ -486,6 +486,205 @@ const sendHostRejectionEmail = async (email, firstName, reason) => {
   }
 };
 
+/**
+ * Send enquiry notification email to host
+ */
+const sendEnquiryNotificationEmail = async (
+  hostEmail,
+  hostFirstName,
+  enquiry,
+  property
+) => {
+  const subject = `New Enquiry for ${property.title} - Room Finder`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .enquiry-box { background-color: white; padding: 20px; border-left: 4px solid #1976D2; margin: 20px 0; }
+        .property-info { background-color: #e3f2fd; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      ${getEmailHeader("New Property Enquiry", "#1976D2")}
+      <div class="content">
+        <p>Hello ${hostFirstName},</p>
+        <p>You have received a new enquiry for your property!</p>
+        
+        <div class="property-info">
+          <h3>Property: ${property.title}</h3>
+          <p><strong>Location:</strong> ${property.city}</p>
+        </div>
+        
+        <div class="enquiry-box">
+          <h3>Enquiry Details:</h3>
+          <p><strong>From:</strong> ${enquiry.guest.firstName} ${
+    enquiry.guest.lastName
+  }</p>
+          <p><strong>Email:</strong> ${enquiry.guest.email}</p>
+          <p><strong>Phone:</strong> ${
+            enquiry.guest.phone || "Not provided"
+          }</p>
+          <p><strong>Subject:</strong> ${enquiry.subject}</p>
+          <p><strong>Message:</strong></p>
+          <p style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0;">${
+            enquiry.message
+          }</p>
+        </div>
+        
+        <p>Please respond to this enquiry as soon as possible to maintain good communication with potential guests.</p>
+        
+        <p>Best regards,<br>The Room Finder Team</p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await sendEmail(hostEmail, subject, html);
+    console.log("Enquiry notification email sent to:", hostEmail);
+  } catch (error) {
+    console.error("Error sending enquiry notification email:", error);
+    throw error;
+  }
+};
+
+/**
+ * Send enquiry response email to guest
+ */
+const sendEnquiryResponseEmail = async (
+  guestEmail,
+  guestFirstName,
+  enquiry,
+  property
+) => {
+  const subject = `Response to Your Enquiry about ${property.title} - Room Finder`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .response-box { background-color: white; padding: 20px; border-left: 4px solid #4CAF50; margin: 20px 0; }
+        .property-info { background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      ${getEmailHeader("Response to Your Enquiry", "#4CAF50")}
+      <div class="content">
+        <p>Hello ${guestFirstName},</p>
+        <p>Great news! The host has responded to your enquiry.</p>
+        
+        <div class="property-info">
+          <h3>Property: ${property.title}</h3>
+          <p><strong>Location:</strong> ${property.city}</p>
+        </div>
+        
+        <div class="response-box">
+          <h3>Host Response:</h3>
+          <p style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0;">${
+            enquiry.response
+          }</p>
+        </div>
+        
+        <p>You can now continue the conversation with the host through the Room Finder platform.</p>
+        
+        <p>Best regards,<br>The Room Finder Team</p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await sendEmail(guestEmail, subject, html);
+    console.log("Enquiry response email sent to:", guestEmail);
+  } catch (error) {
+    console.error("Error sending enquiry response email:", error);
+    throw error;
+  }
+};
+
+/**
+ * Send admin notification email to user
+ */
+const sendAdminNotificationEmail = async (
+  userEmail,
+  userFirstName,
+  notification
+) => {
+  const subject = `${notification.title} - Room Finder`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .content { background-color: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+        .notification-box { background-color: white; padding: 20px; border-left: 4px solid #9C27B0; margin: 20px 0; }
+        .priority-high { border-left-color: #F44336; }
+        .priority-medium { border-left-color: #FF9800; }
+        .priority-low { border-left-color: #4CAF50; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #ddd; color: #666; font-size: 12px; }
+      </style>
+    </head>
+    <body>
+      ${getEmailHeader("Important Notification", "#9C27B0")}
+      <div class="content">
+        <p>Hello ${userFirstName},</p>
+        <p>We have an important update for you.</p>
+        
+        <div class="notification-box priority-${
+          notification.priority?.toLowerCase() || "medium"
+        }">
+          <h3>${notification.title}</h3>
+          <p style="background-color: #f5f5f5; padding: 15px; border-radius: 5px; margin: 10px 0; white-space: pre-line;">${
+            notification.body
+          }</p>
+          ${
+            notification.actionUrl
+              ? `
+            <p style="text-align: center; margin: 20px 0;">
+              <a href="${notification.actionUrl}" style="background-color: #9C27B0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Take Action</a>
+            </p>
+          `
+              : ""
+          }
+        </div>
+        
+        <p>If you have any questions, please contact our support team.</p>
+        
+        <p>Best regards,<br>The Room Finder Team</p>
+      </div>
+      <div class="footer">
+        <p>© ${new Date().getFullYear()} Room Finder. All rights reserved.</p>
+      </div>
+    </body>
+    </html>
+  `;
+
+  try {
+    await sendEmail(userEmail, subject, html);
+    console.log("Admin notification email sent to:", userEmail);
+  } catch (error) {
+    console.error("Error sending admin notification email:", error);
+    throw error;
+  }
+};
+
 // Test email configuration
 const testEmailConfiguration = async () => {
   try {
@@ -518,6 +717,9 @@ module.exports = {
   sendHostApplicationEmail,
   sendHostApprovalEmail,
   sendHostRejectionEmail,
+  sendEnquiryNotificationEmail,
+  sendEnquiryResponseEmail,
+  sendAdminNotificationEmail,
   sendEmail,
   testEmailConfiguration,
   createTransporter,

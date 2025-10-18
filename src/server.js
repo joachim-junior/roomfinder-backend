@@ -28,6 +28,7 @@ const fapshiConfigRoutes = require("./routes/fapshiConfig"); // Added for Fapshi
 const customerSupportRoutes = require("./routes/customerSupport"); // Added for customer support system
 const hostOnboardingRoutes = require("./routes/hostOnboarding"); // Added for enhanced host onboarding
 const payoutRequestRoutes = require("./routes/payoutRequests"); // Added for manual payout approval system
+const adminNotificationRoutes = require("./routes/adminNotifications"); // Added for admin notification system
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -221,6 +222,12 @@ app.use(
     express.urlencoded({ limit: "10mb", extended: true }),
     payoutRequestRoutes
 ); // Added manual payout approval routes
+app.use(
+    "/api/v1/admin/notifications",
+    express.json({ limit: "10mb" }),
+    express.urlencoded({ limit: "10mb", extended: true }),
+    adminNotificationRoutes
+); // Added admin notification routes
 
 // Error handling middleware
 app.use((err, req, res, next) => {
