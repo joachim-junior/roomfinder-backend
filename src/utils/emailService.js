@@ -1,162 +1,190 @@
 const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
+const fs = require("fs");
+const path = require("path");
 
 // Initialize Resend client
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
+const resend = process.env.RESEND_API_KEY ?
+    new Resend(process.env.RESEND_API_KEY) :
+    null;
+
+// Logo utility functions
+const getLogoBase64 = () => {
+    try {
+        const logoPath = path.join(__dirname, "..", "..", "logo-main.png");
+        const logoBuffer = fs.readFileSync(logoPath);
+        return logoBuffer.toString("base64");
+    } catch (error) {
+        console.error("Error reading logo file:", error);
+        return null;
+    }
+};
+
+const getEmailHeader = (title, backgroundColor = "#1976D2") => {
+    const logoBase64 = getLogoBase64();
+    const logoImg = logoBase64 ?
+        `<img src="data:image/png;base64,${logoBase64}" alt="Room Finder" style="max-width: 200px; height: auto; margin-bottom: 10px;">` :
+        '<h1 style="margin: 0; font-size: 24px;">Room Finder</h1>';
+
+    return `
+        <div style="background-color: ${backgroundColor}; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0;">
+            ${logoImg}
+            <h2 style="margin: 10px 0 0 0; font-size: 20px; font-weight: normal;">${title}</h2>
+        </div>
+    `;
+};
 
 // Connection pool to reuse connections (SMTP fallback)
 let transporter = null;
 
 const createTransporter = () => {
-  if (transporter) {
-    return transporter;
-  }
-
-  const config = {
-    host: process.env.EMAIL_HOST || "smtp.titan.email",
-    port: parseInt(process.env.EMAIL_PORT) || 465,
-    secure: true, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_USER || "no-reply@roomfinder237.com",
-      pass: process.env.EMAIL_PASSWORD || "#Noreply123@#",
-    },
-    tls: {
-      rejectUnauthorized: false,
-      minVersion: "TLSv1.2",
-      ciphers: "HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA",
-    },
-    // Connection timeout settings
-    connectionTimeout: 60000, // 60 seconds
-    greetingTimeout: 30000, // 30 seconds
-    socketTimeout: 60000, // 60 seconds
-    // Pool settings for connection reuse
-    pool: true,
-    maxConnections: 5,
-    maxMessages: 100,
-    rateDelta: 20000, // 20 seconds
-    rateLimit: 5, // max 5 messages per rateDelta
-    // Retry settings
-    retryDelay: 5000, // 5 seconds
-    retryAttempts: 3,
-  };
-
-  transporter = nodemailer.createTransport(config);
-
-  // Verify connection configuration
-  transporter.verify((error, success) => {
-    if (error) {
-      console.error("SMTP connection verification failed:", error);
-    } else {
-      console.log("SMTP server is ready to take our messages");
+    if (transporter) {
+        return transporter;
     }
-  });
 
-  return transporter;
+    const config = {
+        host: process.env.EMAIL_HOST || "smtp.titan.email",
+        port: parseInt(process.env.EMAIL_PORT) || 465,
+        secure: true, // true for 465, false for other ports
+        auth: {
+            user: process.env.EMAIL_USER || "no-reply@roomfinder237.com",
+            pass: process.env.EMAIL_PASSWORD || "#Noreply123@#",
+        },
+        tls: {
+            rejectUnauthorized: false,
+            minVersion: "TLSv1.2",
+            ciphers: "HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA",
+        },
+        // Connection timeout settings
+        connectionTimeout: 60000, // 60 seconds
+        greetingTimeout: 30000, // 30 seconds
+        socketTimeout: 60000, // 60 seconds
+        // Pool settings for connection reuse
+        pool: true,
+        maxConnections: 5,
+        maxMessages: 100,
+        rateDelta: 20000, // 20 seconds
+        rateLimit: 5, // max 5 messages per rateDelta
+        // Retry settings
+        retryDelay: 5000, // 5 seconds
+        retryAttempts: 3,
+    };
+
+    transporter = nodemailer.createTransport(config);
+
+    // Verify connection configuration
+    transporter.verify((error, success) => {
+        if (error) {
+            console.error("SMTP connection verification failed:", error);
+        } else {
+            console.log("SMTP server is ready to take our messages");
+        }
+    });
+
+    return transporter;
 };
 
 // Fallback SMTP configuration
 const createFallbackTransporter = () => {
-  const fallbackConfig = {
-    host: process.env.EMAIL_FALLBACK_HOST || "smtp.gmail.com",
-    port: 587,
-    secure: false, // true for 465, false for other ports
-    auth: {
-      user: process.env.EMAIL_FALLBACK_USER || process.env.EMAIL_USER,
-      pass: process.env.EMAIL_FALLBACK_PASS || process.env.EMAIL_PASSWORD,
-    },
-    tls: {
-      rejectUnauthorized: false,
-      minVersion: "TLSv1.2",
-    },
-    connectionTimeout: 30000,
-    greetingTimeout: 15000,
-    socketTimeout: 30000,
-  };
+    const fallbackConfig = {
+        host: process.env.EMAIL_FALLBACK_HOST || "smtp.gmail.com",
+        port: 587,
+        secure: false, // true for 465, false for other ports
+        auth: {
+            user: process.env.EMAIL_FALLBACK_USER || process.env.EMAIL_USER,
+            pass: process.env.EMAIL_FALLBACK_PASS || process.env.EMAIL_PASSWORD,
+        },
+        tls: {
+            rejectUnauthorized: false,
+            minVersion: "TLSv1.2",
+        },
+        connectionTimeout: 30000,
+        greetingTimeout: 15000,
+        socketTimeout: 30000,
+    };
 
-  return nodemailer.createTransport(fallbackConfig);
+    return nodemailer.createTransport(fallbackConfig);
 };
 
 // Enhanced email sending with Resend (primary) and SMTP (fallback)
-const sendEmailWithRetry = async (mailOptions, maxRetries = 3) => {
-  let lastError = null;
+const sendEmailWithRetry = async(mailOptions, maxRetries = 3) => {
+    let lastError = null;
 
-  // Try Resend first if configured
-  if (resend) {
-    try {
-      console.log("Sending email via Resend...");
+    // Try Resend first if configured
+    if (resend) {
+        try {
+            console.log("Sending email via Resend...");
 
-      // Use verified domain if set, otherwise use Resend's default domain
-      const fromEmail = process.env.RESEND_VERIFIED_DOMAIN
-        ? `Room Finder <no-reply@${process.env.RESEND_VERIFIED_DOMAIN}>`
-        : "Room Finder <onboarding@resend.dev>";
+            // Use verified domain if set, otherwise use Resend's default domain
+            const fromEmail = process.env.RESEND_VERIFIED_DOMAIN ?
+                `Room Finder <no-reply@${process.env.RESEND_VERIFIED_DOMAIN}>` :
+                "Room Finder <onboarding@resend.dev>";
 
-      const { data, error } = await resend.emails.send({
-        from: mailOptions.from || fromEmail,
-        to: [mailOptions.to],
-        subject: mailOptions.subject,
-        html: mailOptions.html,
-      });
+            const { data, error } = await resend.emails.send({
+                from: mailOptions.from || fromEmail,
+                to: [mailOptions.to],
+                subject: mailOptions.subject,
+                html: mailOptions.html,
+            });
 
-      if (error) {
-        throw error;
-      }
+            if (error) {
+                throw error;
+            }
 
-      console.log("Email sent successfully via Resend:", data.id);
-      return { messageId: data.id };
-    } catch (error) {
-      console.error("Resend failed, falling back to SMTP:", error.message);
-      lastError = error;
-      // Continue to SMTP fallback
+            console.log("Email sent successfully via Resend:", data.id);
+            return { messageId: data.id };
+        } catch (error) {
+            console.error("Resend failed, falling back to SMTP:", error.message);
+            lastError = error;
+            // Continue to SMTP fallback
+        }
     }
-  }
 
-  // Fallback to SMTP
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      console.log(`Email send attempt ${attempt}/${maxRetries} (SMTP)`);
+    // Fallback to SMTP
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`Email send attempt ${attempt}/${maxRetries} (SMTP)`);
 
-      // Try primary transporter first
-      let currentTransporter = createTransporter();
+            // Try primary transporter first
+            let currentTransporter = createTransporter();
 
-      // If attempt > 1, try fallback
-      if (attempt > 1) {
-        console.log("Trying fallback SMTP configuration...");
-        currentTransporter = createFallbackTransporter();
-      }
+            // If attempt > 1, try fallback
+            if (attempt > 1) {
+                console.log("Trying fallback SMTP configuration...");
+                currentTransporter = createFallbackTransporter();
+            }
 
-      const result = await currentTransporter.sendMail(mailOptions);
-      console.log("Email sent successfully:", result.messageId);
-      return result;
-    } catch (error) {
-      lastError = error;
-      console.error(`Email send attempt ${attempt} failed:`, error.message);
+            const result = await currentTransporter.sendMail(mailOptions);
+            console.log("Email sent successfully:", result.messageId);
+            return result;
+        } catch (error) {
+            lastError = error;
+            console.error(`Email send attempt ${attempt} failed:`, error.message);
 
-      if (attempt < maxRetries) {
-        const delay = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
-        console.log(`Retrying in ${delay}ms...`);
-        await new Promise((resolve) => setTimeout(resolve, delay));
-      }
+            if (attempt < maxRetries) {
+                const delay = attempt * 2000; // Exponential backoff: 2s, 4s, 6s
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise((resolve) => setTimeout(resolve, delay));
+            }
+        }
     }
-  }
 
-  throw lastError;
+    throw lastError;
 };
 
-const sendVerificationEmail = async (email, firstName, verificationToken) => {
-  try {
-    const verificationUrl = `${
+const sendVerificationEmail = async(email, firstName, verificationToken) => {
+    try {
+        const verificationUrl = `${
       process.env.FRONTEND_URL || "https://roomfinder237.com"
     }/verify-email?token=${verificationToken}`;
 
-    const mailOptions = {
-      from: `"Room Finder" <${
+        const mailOptions = {
+            from: `"Room Finder" <${
         process.env.EMAIL_USER || "no-reply@roomfinder237.com"
       }>`,
-      to: email,
-      subject: "Verify Your Email - Room Finder",
-      html: `
+            to: email,
+            subject: "Verify Your Email - Room Finder",
+            html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #007bff; color: white; padding: 20px; text-align: center;">
             <h1>Room Finder</h1>
@@ -180,29 +208,29 @@ const sendVerificationEmail = async (email, firstName, verificationToken) => {
           </div>
         </div>
       `,
-    };
+        };
 
-    await sendEmailWithRetry(mailOptions);
-    console.log("Verification email sent successfully to:", email);
-  } catch (error) {
-    console.error("Error sending verification email:", error);
-    throw error;
-  }
+        await sendEmailWithRetry(mailOptions);
+        console.log("Verification email sent successfully to:", email);
+    } catch (error) {
+        console.error("Error sending verification email:", error);
+        throw error;
+    }
 };
 
-const sendPasswordResetEmail = async (email, firstName, resetToken) => {
-  try {
-    const resetUrl = `${
+const sendPasswordResetEmail = async(email, firstName, resetToken) => {
+    try {
+        const resetUrl = `${
       process.env.FRONTEND_URL || "http://localhost:3000"
     }/reset-password?token=${resetToken}`;
 
-    const mailOptions = {
-      from: `"Room Finder" <${
+        const mailOptions = {
+            from: `"Room Finder" <${
         process.env.EMAIL_USER || "no-reply@roomfinder237.com"
       }>`,
-      to: email,
-      subject: "Reset Your Password - Room Finder",
-      html: `
+            to: email,
+            subject: "Reset Your Password - Room Finder",
+            html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #dc3545; color: white; padding: 20px; text-align: center;">
             <h1>Room Finder</h1>
@@ -226,25 +254,25 @@ const sendPasswordResetEmail = async (email, firstName, resetToken) => {
           </div>
         </div>
       `,
-    };
+        };
 
-    await sendEmailWithRetry(mailOptions);
-    console.log("Password reset email sent successfully to:", email);
-  } catch (error) {
-    console.error("Error sending password reset email:", error);
-    throw error;
-  }
+        await sendEmailWithRetry(mailOptions);
+        console.log("Password reset email sent successfully to:", email);
+    } catch (error) {
+        console.error("Error sending password reset email:", error);
+        throw error;
+    }
 };
 
-const sendWelcomeEmail = async (email, firstName) => {
-  try {
-    const mailOptions = {
-      from: `"Room Finder" <${
+const sendWelcomeEmail = async(email, firstName) => {
+    try {
+        const mailOptions = {
+            from: `"Room Finder" <${
         process.env.EMAIL_USER || "no-reply@roomfinder237.com"
       }>`,
-      to: email,
-      subject: "Welcome to Room Finder!",
-      html: `
+            to: email,
+            subject: "Welcome to Room Finder!",
+            html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <div style="background-color: #28a745; color: white; padding: 20px; text-align: center;">
             <h1>Room Finder</h1>
@@ -272,45 +300,44 @@ const sendWelcomeEmail = async (email, firstName) => {
           </div>
         </div>
       `,
-    };
+        };
 
-    await sendEmailWithRetry(mailOptions);
-    console.log("Welcome email sent successfully to:", email);
-  } catch (error) {
-    console.error("Error sending welcome email:", error);
-    throw error;
-  }
+        await sendEmailWithRetry(mailOptions);
+        console.log("Welcome email sent successfully to:", email);
+    } catch (error) {
+        console.error("Error sending welcome email:", error);
+        throw error;
+    }
 };
 
 // Generic email sending function
-const sendEmail = async (to, subject, html, from = null) => {
-  try {
-    const mailOptions = {
-      from:
-        from ||
-        `"Room Finder" <${
+const sendEmail = async(to, subject, html, from = null) => {
+    try {
+        const mailOptions = {
+            from: from ||
+                `"Room Finder" <${
           process.env.EMAIL_USER || "no-reply@roomfinder237.com"
         }>`,
-      to: to,
-      subject: subject,
-      html: html,
-    };
+            to: to,
+            subject: subject,
+            html: html,
+        };
 
-    await sendEmailWithRetry(mailOptions);
-    console.log("Email sent successfully to:", to);
-  } catch (error) {
-    console.error("Error sending email:", error);
-    throw error;
-  }
+        await sendEmailWithRetry(mailOptions);
+        console.log("Email sent successfully to:", to);
+    } catch (error) {
+        console.error("Error sending email:", error);
+        throw error;
+    }
 };
 
 /**
  * Send host application confirmation email
  */
-const sendHostApplicationEmail = async (email, firstName) => {
-  const subject = "Host Application Received - Room Finder";
+const sendHostApplicationEmail = async(email, firstName) => {
+    const subject = "Host Application Received - Room Finder";
 
-  const html = `
+    const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -323,7 +350,7 @@ const sendHostApplicationEmail = async (email, firstName) => {
       </style>
     </head>
     <body>
-      <div class="header"><h1>Host Application Received!</h1></div>
+      ${getEmailHeader("Host Application Received!", "#1976D2")}
       <div class="content">
         <p>Hello ${firstName},</p>
         <p>Thank you for applying to become a host on Room Finder! We have received your application and our team is currently reviewing it.</p>
@@ -346,23 +373,23 @@ const sendHostApplicationEmail = async (email, firstName) => {
     </html>
   `;
 
-  try {
-    await sendEmail(email, subject, html);
-    console.log("Host application email sent to:", email);
-  } catch (error) {
-    console.error("Error sending host application email:", error);
-    throw error;
-  }
+    try {
+        await sendEmail(email, subject, html);
+        console.log("Host application email sent to:", email);
+    } catch (error) {
+        console.error("Error sending host application email:", error);
+        throw error;
+    }
 };
 
 /**
  * Send host approval email
  */
-const sendHostApprovalEmail = async (email, firstName, notes = "") => {
-  const subject =
-    "Congratulations! Your Host Application Has Been Approved - Room Finder";
+const sendHostApprovalEmail = async(email, firstName, notes = "") => {
+        const subject =
+            "Congratulations! Your Host Application Has Been Approved - Room Finder";
 
-  const html = `
+        const html = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -375,7 +402,7 @@ const sendHostApprovalEmail = async (email, firstName, notes = "") => {
       </style>
     </head>
     <body>
-      <div class="header"><h1>🎉 Congratulations!</h1></div>
+      ${getEmailHeader("🎉 Congratulations!", "#4CAF50")}
       <div class="content">
         <p>Hello ${firstName},</p>
         <p><strong>Great news! Your host application has been approved!</strong></p>
@@ -432,7 +459,7 @@ const sendHostRejectionEmail = async (email, firstName, reason) => {
       </style>
     </head>
     <body>
-      <div class="header"><h1>Host Application Update</h1></div>
+      ${getEmailHeader("Host Application Update", "#FF9800")}
       <div class="content">
         <p>Hello ${firstName},</p>
         <p>Thank you for your interest in becoming a host on Room Finder. After careful review, we are unable to approve your host application at this time.</p>
@@ -495,4 +522,6 @@ module.exports = {
   testEmailConfiguration,
   createTransporter,
   createFallbackTransporter,
+  getLogoBase64,
+  getEmailHeader,
 };
