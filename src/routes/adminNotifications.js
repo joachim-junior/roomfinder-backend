@@ -97,4 +97,22 @@ router.get(
     adminNotificationController.getUsers
 );
 
+// Get recent admin notifications
+router.get(
+    "/recent", [
+        query("page").optional().isInt({ min: 1 }),
+        query("limit").optional().isInt({ min: 1, max: 100 }),
+    ],
+    adminNotificationController.getRecentNotifications
+);
+
+// Get notifications sent by admin
+router.get(
+    "/sent", [
+        query("page").optional().isInt({ min: 1 }),
+        query("limit").optional().isInt({ min: 1, max: 100 }),
+    ],
+    adminNotificationController.getSentNotifications
+);
+
 module.exports = router;

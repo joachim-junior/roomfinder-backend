@@ -148,6 +148,151 @@ class AdminNotificationController {
             res.status(500).json(dbError);
         }
     }
+
+    /**
+     * Get recent admin notifications
+     */
+    async getRecentNotifications(req, res) {
+        try {
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page - 1) * limit;
+
+            const [notifications, total] = await Promise.all([
+                prisma.notification.findMany({
+                    where: {
+                        type: "ADMIN",
+                    },
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true,
+                                role: true,
+                            },
+                        },
+                    },
+                    orderBy: { createdAt: "desc" },
+                    skip,
+                    take: parseInt(limit),
+                }),
+                prisma.notification.count({
+                    where: {
+                        type: "ADMIN",
+                    },
+                }),
+            ]);
+
+            const totalPages = Math.ceil(total / parseInt(limit));
+
+            res.json({
+                success: true,
+                data: {
+                    notifications,
+                    pagination: {
+                        page: parseInt(page),
+                        limit: parseInt(limit),
+                        total,
+                        totalPages,
+                        hasNext: page < totalPages,
+                        hasPrev: page > 1,
+                    },
+                },
+            });
+        } catch (error) {
+            console.error("Get recent notifications error:", error);
+            const dbError = handleDatabaseError(error);
+            res.status(500).json(dbError);
+        }
+    }
+
+    /**
+     * Get notifications sent by admin
+     */
+    async getSentNotifications(req, res) {
+        try {
+            const adminId = req.user.id;
+            const page = parseInt(req.query.page) || 1;
+            const limit = parseInt(req.query.limit) || 10;
+            const skip = (page - 1) * limit;
+
+            // Get notifications where the adminId is in the data field
+            const [notifications, total] = await Promise.all([
+                prisma.notification.findMany({
+                    where: {
+                        type: "ADMIN",
+                        data: {
+                            contains: `"adminId":"${adminId}"`,
+                        },
+                    },
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true,
+                                role: true,
+                            },
+                        },
+                    },
+                    orderBy: { createdAt: "desc" },
+                    skip,
+                    take: parseInt(limit),
+                }),
+                prisma.notification.count({
+                    where: {
+                        type: "ADMIN",
+                        data: {
+                            contains: `"adminId":"${adminId}"`,
+                        },
+                    },
+                }),
+            ]);
+
+            // Parse the data field to extract notification details
+            const formattedNotifications = notifications.map((notification) => {
+                let parsedData = {};
+                try {
+                    parsedData = JSON.parse(notification.data);
+                } catch (e) {
+                    console.error("Error parsing notification data:", e);
+                }
+
+                return {
+                    ...notification,
+                    notificationData: {
+                        priority: parsedData.priority || "MEDIUM",
+                        actionUrl: parsedData.actionUrl || null,
+                        adminId: parsedData.adminId || null,
+                    },
+                };
+            });
+
+            const totalPages = Math.ceil(total / parseInt(limit));
+
+            res.json({
+                success: true,
+                data: {
+                    notifications: formattedNotifications,
+                    pagination: {
+                        page: parseInt(page),
+                        limit: parseInt(limit),
+                        total,
+                        totalPages,
+                        hasNext: page < totalPages,
+                        hasPrev: page > 1,
+                    },
+                },
+            });
+        } catch (error) {
+            console.error("Get sent notifications error:", error);
+            const dbError = handleDatabaseError(error);
+            res.status(500).json(dbError);
+        }
+    }
 }
 
 module.exports = new AdminNotificationController();
