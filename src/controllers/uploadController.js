@@ -9,8 +9,16 @@ const path = require("path");
 const uploadSingleImage = async (req, res) => {
   try {
     // Update base URL based on request for dynamic URL generation
-    const protocol = req.protocol;
-    const host = req.get("host");
+    const protocol = (
+      req.headers["x-forwarded-proto"] ||
+      req.protocol ||
+      "http"
+    )
+      .toString()
+      .split(",")[0];
+    const host = (req.headers["x-forwarded-host"] || req.get("host"))
+      .toString()
+      .split(",")[0];
     const baseUrl = `${protocol}://${host}`;
     railwayStorage.updateBaseUrl(baseUrl);
 
@@ -68,8 +76,16 @@ const uploadSingleImage = async (req, res) => {
 const uploadMultipleImages = async (req, res) => {
   try {
     // Update base URL based on request for dynamic URL generation
-    const protocol = req.protocol;
-    const host = req.get("host");
+    const protocol = (
+      req.headers["x-forwarded-proto"] ||
+      req.protocol ||
+      "http"
+    )
+      .toString()
+      .split(",")[0];
+    const host = (req.headers["x-forwarded-host"] || req.get("host"))
+      .toString()
+      .split(",")[0];
     const baseUrl = `${protocol}://${host}`;
     railwayStorage.updateBaseUrl(baseUrl);
 
