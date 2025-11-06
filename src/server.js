@@ -1,4 +1,5 @@
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
@@ -107,8 +108,8 @@ app.get("/health/db", async (req, res) => {
   }
 });
 
-// Static file serving for uploads
-app.use("/uploads", express.static("uploads"));
+// Static file serving for uploads (use absolute path to avoid cwd issues)
+app.use("/uploads", express.static(path.resolve(__dirname, "../uploads")));
 
 // API Routes
 // Upload routes with specific configuration for large files (NO body parser)
