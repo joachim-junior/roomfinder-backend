@@ -30,6 +30,7 @@ const customerSupportRoutes = require("./routes/customerSupport"); // Added for 
 const hostOnboardingRoutes = require("./routes/hostOnboarding"); // Added for enhanced host onboarding
 const payoutRequestRoutes = require("./routes/payoutRequests"); // Added for manual payout approval system
 const adminNotificationRoutes = require("./routes/adminNotifications"); // Added for admin notification system
+const settingsRoutes = require("./routes/settings"); // Admin settings
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -256,6 +257,13 @@ app.use(
   express.urlencoded({ limit: "10mb", extended: true }),
   adminNotificationRoutes
 ); // Added admin notification routes
+
+app.use(
+  "/api/v1/admin/settings",
+  express.json({ limit: "1mb" }),
+  express.urlencoded({ extended: true }),
+  settingsRoutes
+); // Admin settings routes
 
 // Error handling middleware
 app.use((err, req, res, next) => {

@@ -1,775 +1,859 @@
 const { prisma, handleDatabaseError } = require("./database");
+const settingsService = require("./settingsService");
 const fapshiService = require("./fapshiService");
 const firebaseService = require("./firebaseService");
 
 class PayoutRequestService {
-    /**
-     * Calculate payout preview (no fees - amount requested = amount received)
-     */
-    async calculatePayoutWithFees(amount, currency = "XAF") {
-        try {
-            // No withdrawal fees - all commissions already taken at booking
-            return {
-                requestedAmount: amount,
-                withdrawalFee: 0,
-                netAmount: amount,
-                currency: currency,
-                note: "No withdrawal fee - all commissions deducted during booking",
-            };
-        } catch (error) {
-            console.error("Calculate payout preview error:", error);
-            throw error;
-        }
+  /**
+   * Calculate payout preview (no fees - amount requested = amount received)
+   */
+  async calculatePayoutWithFees(amount, currency = "XAF") {
+    try {
+      // No withdrawal fees - all commissions already taken at booking
+      return {
+        requestedAmount: amount,
+        withdrawalFee: 0,
+        netAmount: amount,
+        currency: currency,
+        note: "No withdrawal fee - all commissions deducted during booking",
+      };
+    } catch (error) {
+      console.error("Calculate payout preview error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Calculate eligible payout amount for host
-     * Based on bookings completed 3+ days ago
-     */
-    async calculateEligibleAmount(userId) {
-        try {
-            const threeDaysAgo = new Date();
-            threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+  /**
+   * Calculate eligible payout amount for host
+   * Based on bookings completed 3+ days ago
+   */
+  async calculateEligibleAmount(userId) {
+    try {
+      const HOLDING_DAYS = await settingsService.getPayoutHoldingDays();
+      const holdingCutoff = new Date();
+      holdingCutoff.setDate(holdingCutoff.getDate() - HOLDING_DAYS);
 
-            // Get wallet balance
-            const wallet = await prisma.wallet.findUnique({
-                where: { userId },
-            });
+      // Get wallet balance
+      const wallet = await prisma.wallet.findUnique({
+        where: { userId },
+      });
 
-            if (!wallet) {
-                return {
-                    totalBalance: 0,
-                    eligibleAmount: 0,
-                    lockedAmount: 0,
-                    pendingPayouts: 0,
-                    breakdown: {
-                        completedBookings: 0,
-                        totalEarned: 0,
-                        pendingAmount: 0,
-                        eligibleAmount: 0,
-                    },
-                };
+      if (!wallet) {
+        return {
+          totalBalance: 0,
+          eligibleAmount: 0,
+          lockedAmount: 0,
+          pendingPayouts: 0,
+          breakdown: {
+            completedBookings: 0,
+            totalEarned: 0,
+            pendingAmount: 0,
+            eligibleAmount: 0,
+          },
+        };
+      }
+
+      // Get all transactions for this host
+      const transactions = await prisma.transaction.findMany({
+        where: {
+          walletId: wallet.id,
+          type: "PAYMENT", // Only payment transactions (earnings from bookings)
+        },
+        include: {
+          booking: {
+            select: {
+              id: true,
+              checkOut: true,
+              status: true,
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+
+      // Get pending payout requests
+      const pendingPayouts = await prisma.payoutRequest.findMany({
+        where: {
+          userId,
+          status: { in: ["PENDING", "APPROVED", "PROCESSING"] },
+        },
+      });
+
+      const totalPendingPayouts = pendingPayouts.reduce(
+        (sum, req) => sum + req.amount,
+        0
+      );
+
+      // Calculate eligible amount based on configurable holding rule per booking
+      let earnedEligible = 0; // earnings past holding
+      let earnedPending = 0; // earnings still within holding
+      let completedBookings = 0;
+      let totalEarned = 0;
+
+      const recentBookings = [];
+
+      // If no transactions, fall back to calculating from bookings directly
+      if (transactions.length === 0) {
+        // Get host's properties and their bookings
+        const hostBookings = await prisma.booking.findMany({
+          where: {
+            property: { hostId: userId },
+            status: { in: ["COMPLETED", "CONFIRMED"] },
+            paymentStatus: { in: ["COMPLETED", "SUCCESSFUL", "PAID"] },
+          },
+          select: {
+            id: true,
+            checkOut: true,
+            status: true,
+            totalPrice: true,
+          },
+          orderBy: { checkOut: "desc" },
+        });
+
+        // Get revenue config to calculate host earnings (after platform fee)
+        const revenueService = require("./revenueService");
+        const revenueConfig = await revenueService.getActiveRevenueConfig();
+        const platformFeePercent = revenueConfig.hostServiceFeePercent || 5.0;
+
+        for (const booking of hostBookings) {
+          // Calculate host earnings after platform fee
+          const platformFee = (booking.totalPrice * platformFeePercent) / 100;
+          const hostEarning = booking.totalPrice - platformFee;
+
+          if (
+            booking.status === "COMPLETED" ||
+            booking.status === "CONFIRMED"
+          ) {
+            const bookingCompletedAt = new Date(booking.checkOut);
+            const isEligible = bookingCompletedAt <= holdingCutoff;
+
+            totalEarned += hostEarning;
+            completedBookings++;
+
+            if (isEligible) {
+              earnedEligible += hostEarning;
+            } else {
+              earnedPending += hostEarning;
+              recentBookings.push({
+                bookingId: booking.id,
+                amount: hostEarning,
+                completedAt: bookingCompletedAt,
+                availableAt: new Date(
+                  bookingCompletedAt.getTime() +
+                    HOLDING_DAYS * 24 * 60 * 60 * 1000
+                ),
+                status: "PENDING",
+              });
             }
-
-            // Get all transactions for this host
-            const transactions = await prisma.transaction.findMany({
-                where: {
-                    walletId: wallet.id,
-                    type: "PAYMENT", // Only payment transactions (earnings from bookings)
-                },
-                include: {
-                    booking: {
-                        select: {
-                            id: true,
-                            checkOut: true,
-                            status: true,
-                        },
-                    },
-                },
-                orderBy: { createdAt: "desc" },
-            });
-
-            // Get pending payout requests
-            const pendingPayouts = await prisma.payoutRequest.findMany({
-                where: {
-                    userId,
-                    status: { in: ["PENDING", "APPROVED", "PROCESSING"] },
-                },
-            });
-
-            const totalPendingPayouts = pendingPayouts.reduce(
-                (sum, req) => sum + req.amount,
-                0
-            );
-
-            // Calculate eligible amount based on 3-day rule per booking
-            let eligibleAmount = 0;
-            let pendingAmount = 0;
-            let completedBookings = 0;
-            let totalEarned = 0;
-
-            const recentBookings = [];
-
-            for (const transaction of transactions) {
-                if (transaction.booking && transaction.booking.status === "COMPLETED") {
-                    const bookingCompletedAt = transaction.booking.checkOut;
-                    const isEligible = new Date(bookingCompletedAt) <= threeDaysAgo;
-
-                    totalEarned += transaction.amount;
-                    completedBookings++;
-
-                    if (isEligible) {
-                        eligibleAmount += transaction.amount;
-                    } else {
-                        pendingAmount += transaction.amount;
-                        recentBookings.push({
-                            bookingId: transaction.booking.id,
-                            amount: transaction.amount,
-                            completedAt: bookingCompletedAt,
-                            availableAt: new Date(
-                                new Date(bookingCompletedAt).getTime() + 3 * 24 * 60 * 60 * 1000
-                            ),
-                            status: "PENDING",
-                        });
-                    }
-                }
-            }
-
-            // Subtract pending payouts from eligible amount
-            const finalEligibleAmount = Math.max(
-                0,
-                eligibleAmount - totalPendingPayouts
-            );
-
-            return {
-                totalBalance: wallet.balance,
-                eligibleAmount: finalEligibleAmount,
-                lockedAmount: totalPendingPayouts,
-                pendingPayouts: pendingPayouts.length,
-                breakdown: {
-                    completedBookings,
-                    totalEarned,
-                    pendingAmount,
-                    eligibleAmount: finalEligibleAmount,
-                },
-                recentBookings: recentBookings.slice(0, 10), // Last 10 recent bookings
-            };
-        } catch (error) {
-            console.error("Calculate eligible amount error:", error);
-            throw error;
+          }
         }
-    }
+      } else {
+        // Use transactions (existing logic)
+        for (const transaction of transactions) {
+          if (
+            transaction.booking &&
+            (transaction.booking.status === "COMPLETED" ||
+              transaction.booking.status === "CONFIRMED")
+          ) {
+            const bookingCompletedAt = transaction.booking.checkOut;
+            const isEligible = new Date(bookingCompletedAt) <= holdingCutoff;
 
-    /**
-     * Create payout request
-     */
-    async createPayoutRequest(userId, requestData) {
-        try {
-            const { amount, phoneNumber, paymentMethod } = requestData;
+            totalEarned += transaction.amount;
+            completedBookings++;
 
-            // Validate amount
-            if (!amount || amount <= 0) {
-                throw new Error("Invalid payout amount");
+            if (isEligible) {
+              earnedEligible += transaction.amount;
+            } else {
+              earnedPending += transaction.amount;
+              recentBookings.push({
+                bookingId: transaction.booking.id,
+                amount: transaction.amount,
+                completedAt: bookingCompletedAt,
+                availableAt: new Date(
+                  new Date(bookingCompletedAt).getTime() +
+                    HOLDING_DAYS * 24 * 60 * 60 * 1000
+                ),
+                status: "PENDING",
+              });
             }
-
-            // Check host profile exists and has payout phone
-            const hostProfile = await prisma.hostProfile.findUnique({
-                where: { userId },
-            });
-
-            if (!hostProfile) {
-                throw new Error("Please complete your host profile first");
-            }
-
-            // Use provided phone or default to profile phone
-            const payoutPhone = phoneNumber || hostProfile.payoutPhoneNumber;
-
-            if (!payoutPhone) {
-                throw new Error("Payout phone number is required");
-            }
-
-            // Check eligible amount
-            const eligibility = await this.calculateEligibleAmount(userId);
-
-            if (amount > eligibility.eligibleAmount) {
-                throw new Error(
-                    `Insufficient eligible balance. You can request up to ${eligibility.eligibleAmount} XAF. ${eligibility.lockedAmount} XAF is locked in pending payout requests.`
-                );
-            }
-
-            // Calculate when funds will be eligible (3 days from now for new bookings)
-            const eligibleAt = new Date();
-            eligibleAt.setDate(eligibleAt.getDate() + 3);
-
-            // Create payout request
-            const payoutRequest = await prisma.payoutRequest.create({
-                data: {
-                    userId,
-                    amount,
-                    phoneNumber: payoutPhone,
-                    paymentMethod: paymentMethod || "MOBILE_MONEY",
-                    status: "PENDING",
-                    eligibleAt: eligibleAt,
-                    metadata: JSON.stringify({
-                        requestedBalance: eligibility.totalBalance,
-                        eligibleBalance: eligibility.eligibleAmount,
-                    }),
-                },
-            });
-
-            // Create notification for admins
-            await this.notifyAdminsOfPayoutRequest(payoutRequest);
-
-            return payoutRequest;
-        } catch (error) {
-            console.error("Create payout request error:", error);
-            throw error;
+          }
         }
+      }
+
+      // Compute eligible limited by wallet balance and minus pending payout requests
+      const eligibleBeforeRequests = Math.max(0, earnedEligible);
+      const eligibleAfterRequests = Math.max(
+        0,
+        eligibleBeforeRequests - totalPendingPayouts
+      );
+      const finalEligibleAmount = Math.min(
+        wallet.balance,
+        eligibleAfterRequests
+      );
+
+      // Define locked as remainder of wallet balance (ensures eligible + locked = totalBalance)
+      const lockedFromHolding = Math.max(
+        0,
+        wallet.balance - finalEligibleAmount
+      );
+
+      return {
+        totalBalance: wallet.balance,
+        eligibleAmount: finalEligibleAmount,
+        lockedAmount: lockedFromHolding,
+        pendingPayouts: pendingPayouts.length,
+        breakdown: {
+          completedBookings,
+          totalEarned,
+          pendingAmount: earnedPending,
+          eligibleAmount: finalEligibleAmount,
+        },
+        recentBookings: recentBookings.slice(0, 10), // Last 10 recent bookings
+      };
+    } catch (error) {
+      console.error("Calculate eligible amount error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Get host's payout requests
-     */
-    async getHostPayoutRequests(userId, page = 1, limit = 10) {
-        try {
-            const skip = (page - 1) * limit;
+  /**
+   * Create payout request
+   */
+  async createPayoutRequest(userId, requestData) {
+    try {
+      const { amount, phoneNumber, paymentMethod } = requestData;
 
-            const [requests, total] = await Promise.all([
-                prisma.payoutRequest.findMany({
-                    where: { userId },
-                    orderBy: { createdAt: "desc" },
-                    skip,
-                    take: limit,
-                }),
-                prisma.payoutRequest.count({ where: { userId } }),
-            ]);
+      // Validate amount
+      if (!amount || amount <= 0) {
+        throw new Error("Invalid payout amount");
+      }
 
-            return {
-                requests,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
-            };
-        } catch (error) {
-            console.error("Get host payout requests error:", error);
-            throw error;
-        }
+      // Check host profile exists and has payout phone
+      const hostProfile = await prisma.hostProfile.findUnique({
+        where: { userId },
+      });
+
+      if (!hostProfile) {
+        throw new Error("Please complete your host profile first");
+      }
+
+      // Use provided phone or default to profile phone
+      const payoutPhone = phoneNumber || hostProfile.payoutPhoneNumber;
+
+      if (!payoutPhone) {
+        throw new Error("Payout phone number is required");
+      }
+
+      // Check eligible amount
+      const eligibility = await this.calculateEligibleAmount(userId);
+
+      if (amount > eligibility.eligibleAmount) {
+        throw new Error(
+          `Insufficient eligible balance. You can request up to ${eligibility.eligibleAmount} XAF. ${eligibility.lockedAmount} XAF is locked in pending payout requests.`
+        );
+      }
+
+      // Calculate when funds will be eligible (configurable days from now for new bookings)
+      const HOLDING_DAYS = await settingsService.getPayoutHoldingDays();
+      const eligibleAt = new Date();
+      eligibleAt.setDate(eligibleAt.getDate() + HOLDING_DAYS);
+
+      // Create payout request
+      const payoutRequest = await prisma.payoutRequest.create({
+        data: {
+          userId,
+          amount,
+          phoneNumber: payoutPhone,
+          paymentMethod: paymentMethod || "MOBILE_MONEY",
+          status: "PENDING",
+          eligibleAt: eligibleAt,
+          metadata: JSON.stringify({
+            requestedBalance: eligibility.totalBalance,
+            eligibleBalance: eligibility.eligibleAmount,
+          }),
+        },
+      });
+
+      // Create notification for admins
+      await this.notifyAdminsOfPayoutRequest(payoutRequest);
+
+      return payoutRequest;
+    } catch (error) {
+      console.error("Create payout request error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Admin: Get all payout requests
-     */
-    async getAllPayoutRequests(filters = {}, page = 1, limit = 10) {
-        try {
-            const { status, userId } = filters;
-            const skip = (page - 1) * limit;
+  /**
+   * Get host's payout requests
+   */
+  async getHostPayoutRequests(userId, page = 1, limit = 10) {
+    try {
+      const skip = (page - 1) * limit;
 
-            const where = {};
-            if (status) where.status = status;
-            if (userId) where.userId = userId;
+      const [requests, total] = await Promise.all([
+        prisma.payoutRequest.findMany({
+          where: { userId },
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+        }),
+        prisma.payoutRequest.count({ where: { userId } }),
+      ]);
 
-            const [requests, total] = await Promise.all([
-                prisma.payoutRequest.findMany({
-                    where,
-                    include: {
-                        user: {
-                            select: {
-                                id: true,
-                                email: true,
-                                firstName: true,
-                                lastName: true,
-                                phone: true,
-                            },
-                        },
-                    },
-                    orderBy: { createdAt: "desc" },
-                    skip,
-                    take: limit,
-                }),
-                prisma.payoutRequest.count({ where }),
-            ]);
-
-            return {
-                requests,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    pages: Math.ceil(total / limit),
-                },
-            };
-        } catch (error) {
-            console.error("Get all payout requests error:", error);
-            throw error;
-        }
+      return {
+        requests,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Get host payout requests error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Admin: Approve payout request
-     */
-    async approvePayoutRequest(requestId, adminId, notes = "") {
-        try {
-            const payoutRequest = await prisma.payoutRequest.findUnique({
-                where: { id: requestId },
-                include: {
-                    user: {
-                        include: {
-                            wallet: true,
-                            hostProfile: true,
-                        },
-                    },
-                },
-            });
+  /**
+   * Admin: Get all payout requests
+   */
+  async getAllPayoutRequests(filters = {}, page = 1, limit = 10) {
+    try {
+      const { status, userId } = filters;
+      const skip = (page - 1) * limit;
 
-            if (!payoutRequest) {
-                throw new Error("Payout request not found");
-            }
+      const where = {};
+      if (status) where.status = status;
+      if (userId) where.userId = userId;
 
-            if (payoutRequest.status !== "PENDING") {
-                throw new Error(
-                    `Cannot approve payout with status: ${payoutRequest.status}`
-                );
-            }
+      const [requests, total] = await Promise.all([
+        prisma.payoutRequest.findMany({
+          where,
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                phone: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+          skip,
+          take: limit,
+        }),
+        prisma.payoutRequest.count({ where }),
+      ]);
 
-            // Check if user has sufficient balance
-            if (!payoutRequest.user.wallet ||
-                payoutRequest.user.wallet.balance < payoutRequest.amount
-            ) {
-                throw new Error("Insufficient wallet balance for payout");
-            }
-
-            // Update payout request to APPROVED
-            const updatedRequest = await prisma.payoutRequest.update({
-                where: { id: requestId },
-                data: {
-                    status: "APPROVED",
-                    approvedAt: new Date(),
-                    approvedBy: adminId,
-                    adminNotes: notes,
-                },
-            });
-
-            // Send approval notification
-            await prisma.notification.create({
-                data: {
-                    userId: payoutRequest.userId,
-                    title: "Payout Approved ✅",
-                    body: `Your payout request for ${payoutRequest.amount} XAF has been approved and is being processed.`,
-                    type: "PUSH",
-                    status: "SENT",
-                    data: JSON.stringify({
-                        type: "PAYOUT_APPROVED",
-                        payoutRequestId: requestId,
-                        amount: payoutRequest.amount,
-                    }),
-                },
-            });
-
-            // Send push notification
-            firebaseService
-                .sendPushNotification(
-                    payoutRequest.userId,
-                    "Payout Approved ✅",
-                    `Your payout of ${payoutRequest.amount} XAF is being processed and will be sent to ${payoutRequest.phoneNumber}`, {
-                        type: "PAYOUT_APPROVED",
-                        payoutRequestId: requestId,
-                        amount: payoutRequest.amount,
-                    }
-                )
-                .catch((err) => {
-                    console.error(
-                        "Failed to send payout approval push notification:",
-                        err.message
-                    );
-                });
-
-            // Now process the payout via Fapshi
-            await this.processApprovedPayout(updatedRequest);
-
-            return updatedRequest;
-        } catch (error) {
-            console.error("Approve payout request error:", error);
-            throw error;
-        }
+      return {
+        requests,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      };
+    } catch (error) {
+      console.error("Get all payout requests error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Process approved payout (called after admin approval)
-     */
-    async processApprovedPayout(payoutRequest) {
-        try {
-            const user = await prisma.user.findUnique({
-                where: { id: payoutRequest.userId },
-                include: {
-                    wallet: true,
-                    hostProfile: true,
-                },
-            });
+  /**
+   * Admin: Approve payout request
+   */
+  async approvePayoutRequest(requestId, adminId, notes = "") {
+    try {
+      const payoutRequest = await prisma.payoutRequest.findUnique({
+        where: { id: requestId },
+        include: {
+          user: {
+            include: {
+              wallet: true,
+              hostProfile: true,
+            },
+          },
+        },
+      });
 
-            if (!user || !user.wallet) {
-                throw new Error("User or wallet not found");
-            }
+      if (!payoutRequest) {
+        throw new Error("Payout request not found");
+      }
 
-            // No withdrawal fees - all fees taken during booking commission
-            // Host receives the full amount they request
+      if (payoutRequest.status !== "PENDING") {
+        throw new Error(
+          `Cannot approve payout with status: ${payoutRequest.status}`
+        );
+      }
 
-            // Update request to PROCESSING
-            await prisma.payoutRequest.update({
-                where: { id: payoutRequest.id },
-                data: {
-                    status: "PROCESSING",
-                    metadata: JSON.stringify({
-                        ...(payoutRequest.metadata ?
-                            JSON.parse(payoutRequest.metadata) :
-                            {}),
-                        note: "No withdrawal fee - all commissions already deducted at booking",
-                    }),
-                },
-            });
+      // Check if user has sufficient balance
+      if (
+        !payoutRequest.user.wallet ||
+        payoutRequest.user.wallet.balance < payoutRequest.amount
+      ) {
+        throw new Error("Insufficient wallet balance for payout");
+      }
 
-            // Deduct requested amount from wallet
-            await prisma.wallet.update({
-                where: { id: user.wallet.id },
-                data: {
-                    balance: user.wallet.balance - payoutRequest.amount,
-                },
-            });
+      // Update payout request to APPROVED
+      const updatedRequest = await prisma.payoutRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "APPROVED",
+          approvedAt: new Date(),
+          approvedBy: adminId,
+          adminNotes: notes,
+        },
+      });
 
-            // Create transaction record
-            const transaction = await prisma.transaction.create({
-                data: {
-                    userId: user.id,
-                    walletId: user.wallet.id,
-                    amount: payoutRequest.amount,
-                    currency: payoutRequest.currency,
-                    type: "WITHDRAWAL",
-                    status: "PROCESSING",
-                    description: `Manual payout request #${payoutRequest.id}`,
-                    reference: `PAYOUT-${Date.now()}`,
-                    metadata: JSON.stringify({
-                        payoutRequestId: payoutRequest.id,
-                        phoneNumber: payoutRequest.phoneNumber,
-                        paymentMethod: payoutRequest.paymentMethod,
-                        note: "No withdrawal fee - commissions already taken at booking",
-                    }),
-                },
-            });
+      // Send approval notification
+      await prisma.notification.create({
+        data: {
+          userId: payoutRequest.userId,
+          title: "Payout Approved ✅",
+          body: `Your payout request for ${payoutRequest.amount} XAF has been approved and is being processed.`,
+          type: "PUSH",
+          status: "SENT",
+          data: JSON.stringify({
+            type: "PAYOUT_APPROVED",
+            payoutRequestId: requestId,
+            amount: payoutRequest.amount,
+          }),
+        },
+      });
 
-            // Update payout request with transaction ID
-            await prisma.payoutRequest.update({
-                where: { id: payoutRequest.id },
-                data: { transactionId: transaction.id },
-            });
+      // Send push notification
+      firebaseService
+        .sendPushNotification(
+          payoutRequest.userId,
+          "Payout Approved ✅",
+          `Your payout of ${payoutRequest.amount} XAF is being processed and will be sent to ${payoutRequest.phoneNumber}`,
+          {
+            type: "PAYOUT_APPROVED",
+            payoutRequestId: requestId,
+            amount: payoutRequest.amount,
+          }
+        )
+        .catch((err) => {
+          console.error(
+            "Failed to send payout approval push notification:",
+            err.message
+          );
+        });
 
-            // Initiate Fapshi payout with FULL REQUESTED AMOUNT (no withdrawal fees)
-            const payoutPayload = {
-                amount: Math.floor(payoutRequest.amount),
-                phone: payoutRequest.phoneNumber.replace("+237", ""),
-                medium: payoutRequest.paymentMethod === "ORANGE_MONEY" ?
-                    "orange money" :
-                    "mobile money",
-                name:
-                    (user.hostProfile && user.hostProfile.fullLegalName) ||
-                    `${user.firstName} ${user.lastName}`,
-                email: user.email,
-                userId: user.id,
-                externalId: transaction.id,
-                message: `Payout request #${payoutRequest.id}`,
-            };
+      // Now process the payout via Fapshi
+      await this.processApprovedPayout(updatedRequest);
 
-            const fapshiResponse = await fapshiService.payout(payoutPayload);
-
-            if (!fapshiResponse || fapshiResponse.statusCode !== 200) {
-                // Rollback: restore wallet balance
-                await prisma.wallet.update({
-                    where: { id: user.wallet.id },
-                    data: { balance: user.wallet.balance },
-                });
-
-                // Mark as failed
-                await prisma.payoutRequest.update({
-                    where: { id: payoutRequest.id },
-                    data: {
-                        status: "FAILED",
-                        adminNotes:
-                            (fapshiResponse && fapshiResponse.message) ||
-                            "Fapshi payout failed",
-                    },
-                });
-
-                await prisma.transaction.update({
-                    where: { id: transaction.id },
-                    data: { status: "FAILED" },
-                });
-
-                throw new Error(
-                    (fapshiResponse && fapshiResponse.message) ||
-                    "Payout processing failed"
-                );
-            }
-
-            // Update with Fapshi transaction ID
-            await prisma.payoutRequest.update({
-                where: { id: payoutRequest.id },
-                data: {
-                    fapshiTransId: fapshiResponse.transId,
-                    processedAt: new Date(),
-                },
-            });
-
-            await prisma.transaction.update({
-                where: { id: transaction.id },
-                data: {
-                    reference: fapshiResponse.transId,
-                    metadata: JSON.stringify({
-                        ...JSON.parse(transaction.metadata),
-                        fapshiTransId: fapshiResponse.transId,
-                        serviceName: fapshiResponse.serviceName,
-                        dateInitiated: fapshiResponse.dateInitiated,
-                    }),
-                },
-            });
-
-            return {
-                success: true,
-                payoutRequest,
-                transaction,
-                fapshiTransId: fapshiResponse.transId,
-            };
-        } catch (error) {
-            console.error("Process approved payout error:", error);
-            throw error;
-        }
+      return updatedRequest;
+    } catch (error) {
+      console.error("Approve payout request error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Admin: Reject payout request
-     */
-    async rejectPayoutRequest(requestId, adminId, reason) {
-        try {
-            if (!reason) {
-                throw new Error("Rejection reason is required");
-            }
+  /**
+   * Process approved payout (called after admin approval)
+   */
+  async processApprovedPayout(payoutRequest) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: payoutRequest.userId },
+        include: {
+          wallet: true,
+          hostProfile: true,
+        },
+      });
 
-            const payoutRequest = await prisma.payoutRequest.findUnique({
-                where: { id: requestId },
-            });
+      if (!user || !user.wallet) {
+        throw new Error("User or wallet not found");
+      }
 
-            if (!payoutRequest) {
-                throw new Error("Payout request not found");
-            }
+      // No withdrawal fees - all fees taken during booking commission
+      // Host receives the full amount they request
 
-            if (payoutRequest.status !== "PENDING") {
-                throw new Error(
-                    `Cannot reject payout with status: ${payoutRequest.status}`
-                );
-            }
+      // Update request to PROCESSING
+      await prisma.payoutRequest.update({
+        where: { id: payoutRequest.id },
+        data: {
+          status: "PROCESSING",
+          metadata: JSON.stringify({
+            ...(payoutRequest.metadata
+              ? JSON.parse(payoutRequest.metadata)
+              : {}),
+            note: "No withdrawal fee - all commissions already deducted at booking",
+          }),
+        },
+      });
 
-            const updatedRequest = await prisma.payoutRequest.update({
-                where: { id: requestId },
-                data: {
-                    status: "REJECTED",
-                    rejectedAt: new Date(),
-                    rejectedBy: adminId,
-                    rejectionReason: reason,
-                },
-            });
+      // Deduct requested amount from wallet
+      await prisma.wallet.update({
+        where: { id: user.wallet.id },
+        data: {
+          balance: user.wallet.balance - payoutRequest.amount,
+        },
+      });
 
-            // Notify host of rejection
-            await prisma.notification.create({
-                data: {
-                    userId: payoutRequest.userId,
-                    title: "Payout Request Rejected",
-                    body: `Your payout request for ${payoutRequest.amount} XAF has been rejected. Reason: ${reason}`,
-                    type: "PUSH",
-                    status: "SENT",
-                    data: JSON.stringify({
-                        payoutRequestId: requestId,
-                        amount: payoutRequest.amount,
-                        reason,
-                    }),
-                },
-            });
+      // Create transaction record
+      const transaction = await prisma.transaction.create({
+        data: {
+          userId: user.id,
+          walletId: user.wallet.id,
+          amount: payoutRequest.amount,
+          currency: payoutRequest.currency,
+          type: "WITHDRAWAL",
+          status: "PROCESSING",
+          description: `Manual payout request #${payoutRequest.id}`,
+          reference: `PAYOUT-${Date.now()}`,
+          metadata: JSON.stringify({
+            payoutRequestId: payoutRequest.id,
+            phoneNumber: payoutRequest.phoneNumber,
+            paymentMethod: payoutRequest.paymentMethod,
+            note: "No withdrawal fee - commissions already taken at booking",
+          }),
+        },
+      });
 
-            // Send push notification
-            firebaseService
-                .sendPushNotification(
-                    payoutRequest.userId,
-                    "Payout Request Rejected",
-                    `Your payout request for ${payoutRequest.amount} XAF has been rejected. ${reason}`, {
-                        type: "PAYOUT_REJECTED",
-                        payoutRequestId: requestId,
-                        amount: payoutRequest.amount,
-                        reason,
-                    }
-                )
-                .catch((err) => {
-                    console.error(
-                        "Failed to send payout rejection push notification:",
-                        err.message
-                    );
-                });
+      // Update payout request with transaction ID
+      await prisma.payoutRequest.update({
+        where: { id: payoutRequest.id },
+        data: { transactionId: transaction.id },
+      });
 
-            return updatedRequest;
-        } catch (error) {
-            console.error("Reject payout request error:", error);
-            throw error;
-        }
+      // Initiate Fapshi payout with FULL REQUESTED AMOUNT (no withdrawal fees)
+      const payoutPayload = {
+        amount: Math.floor(payoutRequest.amount),
+        phone: payoutRequest.phoneNumber.replace("+237", ""),
+        medium:
+          payoutRequest.paymentMethod === "ORANGE_MONEY"
+            ? "orange money"
+            : "mobile money",
+        name:
+          (user.hostProfile && user.hostProfile.fullLegalName) ||
+          `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        userId: user.id,
+        externalId: transaction.id,
+        message: `Payout request #${payoutRequest.id}`,
+      };
+
+      const fapshiResponse = await fapshiService.payout(payoutPayload);
+
+      if (!fapshiResponse || fapshiResponse.statusCode !== 200) {
+        // Rollback: restore wallet balance
+        await prisma.wallet.update({
+          where: { id: user.wallet.id },
+          data: { balance: user.wallet.balance },
+        });
+
+        // Mark as failed
+        await prisma.payoutRequest.update({
+          where: { id: payoutRequest.id },
+          data: {
+            status: "FAILED",
+            adminNotes:
+              (fapshiResponse && fapshiResponse.message) ||
+              "Fapshi payout failed",
+          },
+        });
+
+        await prisma.transaction.update({
+          where: { id: transaction.id },
+          data: { status: "FAILED" },
+        });
+
+        throw new Error(
+          (fapshiResponse && fapshiResponse.message) ||
+            "Payout processing failed"
+        );
+      }
+
+      // Update with Fapshi transaction ID
+      await prisma.payoutRequest.update({
+        where: { id: payoutRequest.id },
+        data: {
+          fapshiTransId: fapshiResponse.transId,
+          processedAt: new Date(),
+        },
+      });
+
+      await prisma.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          reference: fapshiResponse.transId,
+          metadata: JSON.stringify({
+            ...JSON.parse(transaction.metadata),
+            fapshiTransId: fapshiResponse.transId,
+            serviceName: fapshiResponse.serviceName,
+            dateInitiated: fapshiResponse.dateInitiated,
+          }),
+        },
+      });
+
+      return {
+        success: true,
+        payoutRequest,
+        transaction,
+        fapshiTransId: fapshiResponse.transId,
+      };
+    } catch (error) {
+      console.error("Process approved payout error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Cancel payout request (by host, only if pending)
-     */
-    async cancelPayoutRequest(requestId, userId) {
-        try {
-            const payoutRequest = await prisma.payoutRequest.findUnique({
-                where: { id: requestId },
-            });
+  /**
+   * Admin: Reject payout request
+   */
+  async rejectPayoutRequest(requestId, adminId, reason) {
+    try {
+      if (!reason) {
+        throw new Error("Rejection reason is required");
+      }
 
-            if (!payoutRequest) {
-                throw new Error("Payout request not found");
-            }
+      const payoutRequest = await prisma.payoutRequest.findUnique({
+        where: { id: requestId },
+      });
 
-            if (payoutRequest.userId !== userId) {
-                throw new Error("You can only cancel your own payout requests");
-            }
+      if (!payoutRequest) {
+        throw new Error("Payout request not found");
+      }
 
-            if (payoutRequest.status !== "PENDING") {
-                throw new Error(
-                    `Cannot cancel payout with status: ${payoutRequest.status}`
-                );
-            }
+      if (payoutRequest.status !== "PENDING") {
+        throw new Error(
+          `Cannot reject payout with status: ${payoutRequest.status}`
+        );
+      }
 
-            const updatedRequest = await prisma.payoutRequest.update({
-                where: { id: requestId },
-                data: {
-                    status: "CANCELLED",
-                    updatedAt: new Date(),
-                },
-            });
+      const updatedRequest = await prisma.payoutRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "REJECTED",
+          rejectedAt: new Date(),
+          rejectedBy: adminId,
+          rejectionReason: reason,
+        },
+      });
 
-            return updatedRequest;
-        } catch (error) {
-            console.error("Cancel payout request error:", error);
-            throw error;
-        }
+      // Notify host of rejection
+      await prisma.notification.create({
+        data: {
+          userId: payoutRequest.userId,
+          title: "Payout Request Rejected",
+          body: `Your payout request for ${payoutRequest.amount} XAF has been rejected. Reason: ${reason}`,
+          type: "PUSH",
+          status: "SENT",
+          data: JSON.stringify({
+            payoutRequestId: requestId,
+            amount: payoutRequest.amount,
+            reason,
+          }),
+        },
+      });
+
+      // Send push notification
+      firebaseService
+        .sendPushNotification(
+          payoutRequest.userId,
+          "Payout Request Rejected",
+          `Your payout request for ${payoutRequest.amount} XAF has been rejected. ${reason}`,
+          {
+            type: "PAYOUT_REJECTED",
+            payoutRequestId: requestId,
+            amount: payoutRequest.amount,
+            reason,
+          }
+        )
+        .catch((err) => {
+          console.error(
+            "Failed to send payout rejection push notification:",
+            err.message
+          );
+        });
+
+      return updatedRequest;
+    } catch (error) {
+      console.error("Reject payout request error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Get payout statistics for admin dashboard
-     */
-    async getPayoutStatistics() {
-        try {
-            const [pending, approved, processing, completed, rejected, totalAmount] =
-            await Promise.all([
-                prisma.payoutRequest.count({ where: { status: "PENDING" } }),
-                prisma.payoutRequest.count({ where: { status: "APPROVED" } }),
-                prisma.payoutRequest.count({ where: { status: "PROCESSING" } }),
-                prisma.payoutRequest.count({ where: { status: "COMPLETED" } }),
-                prisma.payoutRequest.count({ where: { status: "REJECTED" } }),
-                prisma.payoutRequest.aggregate({
-                    where: { status: { in: ["PENDING", "APPROVED", "PROCESSING"] } },
-                    _sum: { amount: true },
-                }),
-            ]);
+  /**
+   * Cancel payout request (by host, only if pending)
+   */
+  async cancelPayoutRequest(requestId, userId) {
+    try {
+      const payoutRequest = await prisma.payoutRequest.findUnique({
+        where: { id: requestId },
+      });
 
-            return {
-                pending,
-                approved,
-                processing,
-                completed,
-                rejected,
-                totalPendingAmount: totalAmount._sum.amount || 0,
-            };
-        } catch (error) {
-            console.error("Get payout statistics error:", error);
-            throw error;
-        }
+      if (!payoutRequest) {
+        throw new Error("Payout request not found");
+      }
+
+      if (payoutRequest.userId !== userId) {
+        throw new Error("You can only cancel your own payout requests");
+      }
+
+      if (payoutRequest.status !== "PENDING") {
+        throw new Error(
+          `Cannot cancel payout with status: ${payoutRequest.status}`
+        );
+      }
+
+      const updatedRequest = await prisma.payoutRequest.update({
+        where: { id: requestId },
+        data: {
+          status: "CANCELLED",
+          updatedAt: new Date(),
+        },
+      });
+
+      return updatedRequest;
+    } catch (error) {
+      console.error("Cancel payout request error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Notify admins of new payout request
-     */
-    async notifyAdminsOfPayoutRequest(payoutRequest) {
-        try {
-            // Get all admin users
-            const admins = await prisma.user.findMany({
-                where: { role: "ADMIN" },
-                select: { id: true },
-            });
+  /**
+   * Get payout statistics for admin dashboard
+   */
+  async getPayoutStatistics() {
+    try {
+      const [pending, approved, processing, completed, rejected, totalAmount] =
+        await Promise.all([
+          prisma.payoutRequest.count({ where: { status: "PENDING" } }),
+          prisma.payoutRequest.count({ where: { status: "APPROVED" } }),
+          prisma.payoutRequest.count({ where: { status: "PROCESSING" } }),
+          prisma.payoutRequest.count({ where: { status: "COMPLETED" } }),
+          prisma.payoutRequest.count({ where: { status: "REJECTED" } }),
+          prisma.payoutRequest.aggregate({
+            where: { status: { in: ["PENDING", "APPROVED", "PROCESSING"] } },
+            _sum: { amount: true },
+          }),
+        ]);
 
-            // Create notifications for all admins
-            const notifications = admins.map((admin) => ({
-                userId: admin.id,
-                title: "New Payout Request",
-                body: `A host has requested a payout of ${payoutRequest.amount} XAF`,
-                type: "PUSH",
-                status: "SENT",
-                data: JSON.stringify({
-                    payoutRequestId: payoutRequest.id,
-                    userId: payoutRequest.userId,
-                    amount: payoutRequest.amount,
-                }),
-            }));
-
-            if (notifications.length > 0) {
-                await prisma.notification.createMany({
-                    data: notifications,
-                });
-            }
-        } catch (error) {
-            console.error("Notify admins of payout request error:", error);
-            // Don't throw - notifications are not critical
-        }
+      return {
+        pending,
+        approved,
+        processing,
+        completed,
+        rejected,
+        totalPendingAmount: totalAmount._sum.amount || 0,
+      };
+    } catch (error) {
+      console.error("Get payout statistics error:", error);
+      throw error;
     }
+  }
 
-    /**
-     * Update payout request status from Fapshi webhook
-     */
-    async updatePayoutStatusFromWebhook(transactionId, fapshiStatus) {
-        try {
-            // Find payout request by transaction ID
-            const payoutRequest = await prisma.payoutRequest.findFirst({
-                where: { transactionId },
-            });
+  /**
+   * Notify admins of new payout request
+   */
+  async notifyAdminsOfPayoutRequest(payoutRequest) {
+    try {
+      // Get all admin users
+      const admins = await prisma.user.findMany({
+        where: { role: "ADMIN" },
+        select: { id: true },
+      });
 
-            if (!payoutRequest) {
-                console.log("No payout request found for transaction:", transactionId);
-                return null;
-            }
+      // Create notifications for all admins
+      const notifications = admins.map((admin) => ({
+        userId: admin.id,
+        title: "New Payout Request",
+        body: `A host has requested a payout of ${payoutRequest.amount} XAF`,
+        type: "PUSH",
+        status: "SENT",
+        data: JSON.stringify({
+          payoutRequestId: payoutRequest.id,
+          userId: payoutRequest.userId,
+          amount: payoutRequest.amount,
+        }),
+      }));
 
-            let newStatus = payoutRequest.status;
-
-            switch (fapshiStatus) {
-                case "SUCCESSFUL":
-                    newStatus = "COMPLETED";
-                    break;
-                case "FAILED":
-                case "EXPIRED":
-                    newStatus = "FAILED";
-                    // Refund wallet
-                    await prisma.wallet.update({
-                        where: { userId: payoutRequest.userId },
-                        data: { balance: { increment: payoutRequest.amount } },
-                    });
-                    break;
-            }
-
-            const updatedRequest = await prisma.payoutRequest.update({
-                where: { id: payoutRequest.id },
-                data: {
-                    status: newStatus,
-                    processedAt: newStatus === "COMPLETED" ? new Date() : payoutRequest.processedAt,
-                },
-            });
-
-            // Notify host of status update
-            await prisma.notification.create({
-                data: {
-                    userId: payoutRequest.userId,
-                    title: newStatus === "COMPLETED" ? "Payout Completed" : "Payout Failed",
-                    body: newStatus === "COMPLETED" ?
-                        `Your payout of ${payoutRequest.amount} XAF has been sent to ${payoutRequest.phoneNumber}` :
-                        `Your payout of ${payoutRequest.amount} XAF has failed. The amount has been refunded to your wallet.`,
-                    type: "PUSH",
-                    status: "SENT",
-                    data: JSON.stringify({
-                        payoutRequestId: payoutRequest.id,
-                        amount: payoutRequest.amount,
-                        status: newStatus,
-                    }),
-                },
-            });
-
-            return updatedRequest;
-        } catch (error) {
-            console.error("Update payout status from webhook error:", error);
-            throw error;
-        }
+      if (notifications.length > 0) {
+        await prisma.notification.createMany({
+          data: notifications,
+        });
+      }
+    } catch (error) {
+      console.error("Notify admins of payout request error:", error);
+      // Don't throw - notifications are not critical
     }
+  }
+
+  /**
+   * Update payout request status from Fapshi webhook
+   */
+  async updatePayoutStatusFromWebhook(transactionId, fapshiStatus) {
+    try {
+      // Find payout request by transaction ID
+      const payoutRequest = await prisma.payoutRequest.findFirst({
+        where: { transactionId },
+      });
+
+      if (!payoutRequest) {
+        console.log("No payout request found for transaction:", transactionId);
+        return null;
+      }
+
+      let newStatus = payoutRequest.status;
+
+      switch (fapshiStatus) {
+        case "SUCCESSFUL":
+          newStatus = "COMPLETED";
+          break;
+        case "FAILED":
+        case "EXPIRED":
+          newStatus = "FAILED";
+          // Refund wallet
+          await prisma.wallet.update({
+            where: { userId: payoutRequest.userId },
+            data: { balance: { increment: payoutRequest.amount } },
+          });
+          break;
+      }
+
+      const updatedRequest = await prisma.payoutRequest.update({
+        where: { id: payoutRequest.id },
+        data: {
+          status: newStatus,
+          processedAt:
+            newStatus === "COMPLETED" ? new Date() : payoutRequest.processedAt,
+        },
+      });
+
+      // Notify host of status update
+      await prisma.notification.create({
+        data: {
+          userId: payoutRequest.userId,
+          title:
+            newStatus === "COMPLETED" ? "Payout Completed" : "Payout Failed",
+          body:
+            newStatus === "COMPLETED"
+              ? `Your payout of ${payoutRequest.amount} XAF has been sent to ${payoutRequest.phoneNumber}`
+              : `Your payout of ${payoutRequest.amount} XAF has failed. The amount has been refunded to your wallet.`,
+          type: "PUSH",
+          status: "SENT",
+          data: JSON.stringify({
+            payoutRequestId: payoutRequest.id,
+            amount: payoutRequest.amount,
+            status: newStatus,
+          }),
+        },
+      });
+
+      return updatedRequest;
+    } catch (error) {
+      console.error("Update payout status from webhook error:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = new PayoutRequestService();

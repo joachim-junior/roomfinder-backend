@@ -270,6 +270,17 @@ model PlatformRevenue {
   @@map("platform_revenues")
 }
 
+// App-wide key-value settings
+model AppSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("app_settings")
+}
+
 model Favorite {
   id         String   @id @default(cuid())
   createdAt  DateTime @default(now())
