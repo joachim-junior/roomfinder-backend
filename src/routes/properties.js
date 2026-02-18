@@ -15,12 +15,26 @@ const {
 // Public routes (with optional authentication)
 router.get("/", optionalAuth, propertyController.getProperties);
 router.get("/search", optionalAuth, propertyController.searchProperties);
-router.get("/:id", optionalAuth, propertyController.getPropertyById);
 
 // Protected routes (require authentication)
+// These must be defined BEFORE /:id to avoid the catch-all matching "host" as an id
+router.get(
+  "/host/my-properties",
+  authenticateToken,
+  propertyController.getHostProperties
+);
+router.get(
+  "/host/stats",
+  authenticateToken,
+  propertyController.getPropertyStats
+);
+
+// Public single property route (must come after /host/* routes)
+router.get("/:id", optionalAuth, propertyController.getPropertyById);
+
+// Protected write routes
 router.use(authenticateToken);
 
-// Host-only routes (require verification for hosts)
 router.post(
   "/",
   validateProperty,
@@ -28,8 +42,6 @@ router.post(
   requireVerification,
   propertyController.createProperty
 );
-router.get("/host/my-properties", propertyController.getHostProperties);
-router.get("/host/stats", propertyController.getPropertyStats);
 
 // Property management (owner or admin only)
 router.put("/:id", validatePropertyUpdate, propertyController.updateProperty);

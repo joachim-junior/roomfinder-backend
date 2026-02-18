@@ -26,11 +26,11 @@ const validateHostProfile = [
     .matches(/^(\+237)?6[0-9]{8}$/)
     .withMessage("Invalid Cameroon WhatsApp number (must start with 6)"),
     body("facebookUrl")
-    .optional()
+    .optional({ values: "falsy" })
     .isURL()
     .withMessage("facebookUrl must be a valid URL"),
     body("instagramUrl")
-    .optional()
+    .optional({ values: "falsy" })
     .isURL()
     .withMessage("instagramUrl must be a valid URL"),
     body("payoutPhoneNumber")
@@ -38,9 +38,9 @@ const validateHostProfile = [
     .withMessage("Payout phone number is required")
     .matches(/^(\+237)?6[0-9]{8}$/)
     .withMessage("Invalid Cameroon phone number format (must start with 6)"),
-    body("dateOfBirth").optional().isISO8601().withMessage("Invalid date format"),
+    body("dateOfBirth").optional({ values: "falsy" }).isISO8601().withMessage("Invalid date format"),
     body("idExpiryDate")
-    .optional()
+    .optional({ values: "falsy" })
     .isISO8601()
     .withMessage("Invalid date format"),
 ];
@@ -83,7 +83,7 @@ const validatePayoutDetails = [
     .matches(/^(\+237)?6[0-9]{8}$/)
     .withMessage("Invalid Cameroon phone number format (must start with 6)"),
     body("payoutPhoneName")
-    .optional()
+    .optional({ values: "falsy" })
     .isString()
     .isLength({ max: 100 })
     .withMessage("Payout phone name must be less than 100 characters"),

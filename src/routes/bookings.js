@@ -16,18 +16,18 @@ router.post("/", validateBooking, bookingController.createBooking);
 router.get("/my-bookings", bookingController.getUserBookings);
 router.get("/availability", bookingController.checkAvailability);
 router.get("/stats", bookingController.getBookingStats);
-router.get("/:id", bookingController.getBookingById);
-
-// Check if user has booked a specific property
 router.get("/has-booked/:propertyId", bookingController.hasUserBookedProperty);
-router.put("/:id/cancel", bookingController.cancelBooking);
 
-// Host routes
+// Host routes (must come before /:id catch-all)
 router.get(
     "/host/bookings",
     requireRole(["HOST", "ADMIN"]),
     bookingController.getHostBookings
 );
+
+// Parameterized routes (must come last)
+router.get("/:id", bookingController.getBookingById);
+router.put("/:id/cancel", bookingController.cancelBooking);
 router.put(
     "/:id/status",
     requireRole(["HOST", "ADMIN"]),

@@ -214,7 +214,7 @@ const getProperties = async (req, res) => {
 
     // Only apply isAvailable filter if explicitly provided
     if (isAvailable !== undefined) {
-      where.isAvailable = isAvailable === "true";
+      where.isAvailable = isAvailable === true || isAvailable === "true";
     }
 
     if (city) {

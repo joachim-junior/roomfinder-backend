@@ -1,5 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const { OAuth2Client } = require("google-auth-library");
 const { prisma, handleDatabaseError } = require("../utils/database");
 const {
   sendVerificationEmail,
@@ -13,6 +15,8 @@ const {
   generatePasswordResetExpiration,
   isTokenExpired,
 } = require("../utils/tokenUtils");
+
+const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 /**
  * Register a new user
@@ -593,6 +597,115 @@ const resendVerification = async (req, res) => {
   }
 };
 
+/**
+ * Google OAuth — verify ID token, create or login user
+ */
+const googleAuth = async (req, res) => {
+  try {
+    const { credential, role = "GUEST" } = req.body;
+
+    if (!credential) {
+      return res.status(400).json({
+        error: "Google auth failed",
+        message: "Google credential is required",
+      });
+    }
+
+    const ticket = await googleClient.verifyIdToken({
+      idToken: credential,
+      audience: process.env.GOOGLE_CLIENT_ID,
+    });
+
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email) {
+      return res.status(400).json({
+        error: "Google auth failed",
+        message: "Could not extract email from Google token",
+      });
+    }
+
+    const { email, given_name, family_name, picture, email_verified } = payload;
+
+    let user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      // Existing user — log them in
+      const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN,
+      });
+
+      const userData = {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        isVerified: user.isVerified,
+        phone: user.phone,
+        avatar: user.avatar,
+        createdAt: user.createdAt,
+      };
+
+      return res.json({ message: "Login successful", user: userData, token });
+    }
+
+    // New user — create account with a random password they'll never use directly
+    const randomPassword = crypto.randomBytes(32).toString("hex");
+    const hashedPassword = await bcrypt.hash(randomPassword, 10);
+
+    user = await prisma.user.create({
+      data: {
+        email,
+        password: hashedPassword,
+        firstName: given_name || "User",
+        lastName: family_name || "",
+        role,
+        isVerified: !!email_verified,
+        avatar: picture || null,
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isVerified: true,
+        phone: true,
+        avatar: true,
+        createdAt: true,
+      },
+    });
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(email, user.firstName).catch((err) => {
+      console.error("sendWelcomeEmail failed:", err?.message || err);
+    });
+
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRES_IN,
+    });
+
+    res.status(201).json({
+      message: "Account created successfully with Google.",
+      user,
+      token,
+    });
+  } catch (error) {
+    console.error("Google auth error:", error);
+
+    if (error.message?.includes("Token used too late") ||
+        error.message?.includes("Invalid token")) {
+      return res.status(401).json({
+        error: "Google auth failed",
+        message: "Google token is invalid or expired. Please try again.",
+      });
+    }
+
+    const dbError = handleDatabaseError(error);
+    res.status(500).json(dbError);
+  }
+};
+
 module.exports = {
   register,
   login,
@@ -604,4 +717,5 @@ module.exports = {
   requestPasswordReset,
   resetPassword,
   resendVerification,
+  googleAuth,
 };

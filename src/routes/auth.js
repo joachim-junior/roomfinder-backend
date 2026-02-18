@@ -6,14 +6,21 @@ const {
   validateRegistration,
   validateLogin,
 } = require("../middleware/validation");
+const {
+  registerLimiter,
+  loginLimiter,
+  emailActionLimiter,
+} = require("../middleware/rateLimiter");
+const { verifyTurnstile } = require("../middleware/turnstile");
 
-// Public routes
-router.post("/register", validateRegistration, authController.register);
-router.post("/login", validateLogin, authController.login);
+// Public routes (with rate limiting)
+router.post("/register", registerLimiter, verifyTurnstile, validateRegistration, authController.register);
+router.post("/login", loginLimiter, validateLogin, authController.login);
 router.post("/verify-email", authController.verifyEmail);
-router.post("/forgot-password", authController.requestPasswordReset);
-router.post("/reset-password", authController.resetPassword);
-router.post("/resend-verification", authController.resendVerification);
+router.post("/forgot-password", emailActionLimiter, authController.requestPasswordReset);
+router.post("/reset-password", emailActionLimiter, authController.resetPassword);
+router.post("/resend-verification", emailActionLimiter, authController.resendVerification);
+router.post("/google", loginLimiter, authController.googleAuth);
 
 // Protected routes
 router.get("/profile", authenticateToken, authController.getProfile);

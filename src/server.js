@@ -63,7 +63,19 @@ if (process.env.FORCE_HTTPS === "true") {
         next();
     });
 }
-app.use(helmet()); // Security headers
+app.use(
+    helmet({
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                imgSrc: ["'self'", "data:", "blob:", "*"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'", "https:", "'unsafe-inline'"],
+            },
+        },
+        crossOriginResourcePolicy: { policy: "cross-origin" },
+    })
+); // Security headers
 app.use(cors()); // Enable CORS
 app.use(morgan("combined")); // Logging
 
@@ -110,7 +122,11 @@ app.get("/health/db", async(req, res) => {
 });
 
 // Static file serving for uploads (use absolute path to avoid cwd issues)
-app.use("/uploads", express.static(path.resolve(__dirname, "../uploads")));
+app.use("/uploads", (req, res, next) => {
+    res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    next();
+}, express.static(path.resolve(__dirname, "../uploads")));
 
 // API Routes
 // Upload routes with specific configuration for large files (NO body parser)
