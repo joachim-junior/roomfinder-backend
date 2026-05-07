@@ -252,6 +252,42 @@ class HostOnboardingController {
             res.status(500).json(dbError);
         }
     }
+
+    /**
+     * Admin: List all host onboarding verifications (submitted documents)
+     */
+    async listAdminVerifications(req, res) {
+        try {
+            const page = parseInt(req.query.page, 10) || 1;
+            const rawLimit = parseInt(req.query.limit, 10) || 20;
+            const limit = Math.min(Math.max(rawLimit, 1), 100);
+            const search = typeof req.query.search === "string" ? req.query.search : "";
+            const pendingOnly = req.query.pendingOnly === "true";
+
+            if (page < 1) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Page number must be greater than 0",
+                });
+            }
+
+            const result = await hostOnboardingService.getAdminVerificationList({
+                page,
+                limit,
+                search,
+                pendingOnly,
+            });
+
+            res.json({
+                success: true,
+                data: result,
+            });
+        } catch (error) {
+            console.error("List admin verifications error:", error);
+            const dbError = handleDatabaseError(error);
+            res.status(500).json(dbError);
+        }
+    }
 }
 
 module.exports = new HostOnboardingController();

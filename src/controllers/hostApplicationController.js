@@ -81,10 +81,11 @@ class HostApplicationController {
       }
 
       const { status, isVerified, search } = req.query;
-      const skip = (page - 1) * limit;
 
+      // Anyone who has submitted a host application (pending hosts are HOST;
+      // rejected applicants are reverted to GUEST but keep hostApplicationDate)
       const where = {
-        role: "HOST",
+        hostApplicationDate: { not: null },
       };
 
       // Filter by approval status
@@ -218,13 +219,6 @@ class HostApplicationController {
       const { reason } = req.body;
       const adminId = req.user.id;
 
-      if (!reason) {
-        return res.status(400).json({
-          success: false,
-          message: "Rejection reason is required",
-        });
-      }
-
       const result = await hostApplicationService.rejectHostApplication(
         userId,
         adminId,
@@ -260,13 +254,6 @@ class HostApplicationController {
       const { userId } = req.params;
       const { reason } = req.body;
       const adminId = req.user.id;
-
-      if (!reason) {
-        return res.status(400).json({
-          success: false,
-          message: "Suspension reason is required",
-        });
-      }
 
       const result = await hostApplicationService.suspendHost(
         userId,

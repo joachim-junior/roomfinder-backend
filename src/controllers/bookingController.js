@@ -86,6 +86,14 @@ const createBooking = async (req, res) => {
       });
     }
 
+    if (!property.isVerified) {
+      return res.status(400).json({
+        error: "Property not available",
+        message:
+          "This listing has not been approved yet and cannot be booked.",
+      });
+    }
+
     // Check if property can accommodate the number of guests
     if (guests > property.maxGuests) {
       return res.status(400).json({
@@ -1075,6 +1083,8 @@ const calculateBookingFees = async (req, res) => {
         currency: true,
         maxGuests: true,
         isAvailable: true,
+        isVerified: true,
+        hostId: true,
       },
     });
 
@@ -1089,6 +1099,14 @@ const calculateBookingFees = async (req, res) => {
       return res.status(400).json({
         error: "Property unavailable",
         message: "This property is currently not available for booking",
+      });
+    }
+
+    if (!property.isVerified) {
+      return res.status(400).json({
+        error: "Property not available",
+        message:
+          "This listing has not been approved yet and cannot be booked.",
       });
     }
 

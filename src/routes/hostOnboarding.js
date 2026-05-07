@@ -131,6 +131,12 @@ router.put(
 // Admin routes
 router.use(requireRole(["ADMIN"]));
 
+// All host onboarding verification records (ID + ownership documents)
+router.get(
+    "/admin/verifications",
+    hostOnboardingController.listAdminVerifications
+);
+
 // Get pending verifications
 router.get(
     "/pending-verifications",

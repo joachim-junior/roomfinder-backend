@@ -25,22 +25,24 @@ const validateApproval = [
 
 const validateRejection = [
   body("reason")
+    .trim()
     .notEmpty()
     .withMessage("Rejection reason is required")
     .isString()
     .withMessage("Reason must be a string")
     .isLength({ max: 500 })
-    .withMessage("Reason must be less than 500 characters"),
+    .withMessage("Reason must be at most 500 characters"),
 ];
 
 const validateSuspension = [
   body("reason")
+    .trim()
     .notEmpty()
     .withMessage("Suspension reason is required")
     .isString()
     .withMessage("Reason must be a string")
     .isLength({ max: 500 })
-    .withMessage("Reason must be less than 500 characters"),
+    .withMessage("Reason must be at most 500 characters"),
 ];
 
 // User routes (require authentication)

@@ -212,6 +212,10 @@ const getProperties = async (req, res) => {
     // Build filter conditions
     const where = {};
 
+    // Public marketplace listings: only platform-approved (verified) properties.
+    // Hosts manage drafts via GET /properties/host/my-properties; admins use GET /admin/properties.
+    where.isVerified = true;
+
     // Only apply isAvailable filter if explicitly provided
     if (isAvailable !== undefined) {
       where.isAvailable = isAvailable === true || isAvailable === "true";
@@ -357,6 +361,17 @@ const getPropertyById = async (req, res) => {
       });
     }
 
+    const viewer = req.user;
+    const viewerIsOwner = viewer && viewer.id === property.hostId;
+    const viewerIsAdmin = viewer && viewer.role === "ADMIN";
+
+    if (!property.isVerified && !viewerIsOwner && !viewerIsAdmin) {
+      return res.status(404).json({
+        error: "Property not found",
+        message: "The requested property does not exist",
+      });
+    }
+
     // Calculate average rating
     const avgRating = await prisma.review.aggregate({
       where: { propertyId: id },
@@ -452,6 +467,11 @@ const updateProperty = async (req, res) => {
         invalidFields.push(key);
       }
     });
+
+    // Only admins may change verification status (platform approval for guest-facing listings)
+    if (req.user.role !== "ADMIN") {
+      delete filteredUpdateData.isVerified;
+    }
 
     // Log invalid fields for debugging
     if (invalidFields.length > 0) {
@@ -624,6 +644,7 @@ const searchProperties = async (req, res) => {
     // Build search conditions
     const where = {
       isAvailable: true,
+      isVerified: true,
     };
 
     if (query) {

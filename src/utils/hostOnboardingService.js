@@ -550,6 +550,93 @@ class HostOnboardingService {
     }
 
     /**
+     * List host verification records for admin (all onboarding documents).
+     */
+    async getAdminVerificationList({ page = 1, limit = 20, search = "", pendingOnly = false } = {}) {
+        try {
+            const skip = (page - 1) * limit;
+            const safeLimit = Math.min(Math.max(limit, 1), 100);
+            const clauses = [];
+
+            if (pendingOnly) {
+                clauses.push({
+                    OR: [
+                        { idVerificationStatus: "PENDING" },
+                        { ownershipVerificationStatus: "PENDING" },
+                    ],
+                });
+            }
+
+            const q = typeof search === "string" ? search.trim() : "";
+            if (q) {
+                clauses.push({
+                    user: {
+                        is: {
+                            OR: [
+                                { email: { contains: q, mode: "insensitive" } },
+                                { firstName: { contains: q, mode: "insensitive" } },
+                                { lastName: { contains: q, mode: "insensitive" } },
+                            ],
+                        },
+                    },
+                });
+            }
+
+            const where = clauses.length ? { AND: clauses } : {};
+
+            const [verifications, total] = await Promise.all([
+                prisma.hostVerification.findMany({
+                    where,
+                    skip,
+                    take: safeLimit,
+                    orderBy: { updatedAt: "desc" },
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                email: true,
+                                firstName: true,
+                                lastName: true,
+                                phone: true,
+                                hostApprovalStatus: true,
+                                role: true,
+                            },
+                        },
+                    },
+                }),
+                prisma.hostVerification.count({ where }),
+            ]);
+
+            const verificationsWithProfiles = await Promise.all(
+                verifications.map(async(verification) => {
+                    const profile = await prisma.hostProfile.findUnique({
+                        where: { userId: verification.userId },
+                    });
+                    return {
+                        ...verification,
+                        profile,
+                    };
+                })
+            );
+
+            const pages = total === 0 ? 0 : Math.ceil(total / safeLimit);
+
+            return {
+                verifications: verificationsWithProfiles,
+                pagination: {
+                    page,
+                    limit: safeLimit,
+                    total,
+                    pages,
+                },
+            };
+        } catch (error) {
+            console.error("Get admin verification list error:", error);
+            throw error;
+        }
+    }
+
+    /**
      * Get all hosts pending verification (Admin)
      */
     async getPendingVerifications(page = 1, limit = 10) {

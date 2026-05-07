@@ -17,9 +17,11 @@ class HostApplicationService {
         throw new Error("User not found");
       }
 
-      // Only GUEST and HOST (with REJECTED status) can apply/reapply
+      // Only guests or hosts re-applying may submit (admins/co-hosts etc. cannot use this flow)
       if (user.role !== "GUEST" && user.role !== "HOST") {
-        throw new Error("Only guests can apply to become hosts");
+        throw new Error(
+          "Only guest accounts or host accounts re-applying may submit a host application"
+        );
       }
 
       // Check application status
@@ -136,6 +138,40 @@ class HostApplicationService {
             hostRejectionReason: true,
             createdAt: true,
             updatedAt: true,
+            hostProfile: {
+              select: {
+                fullLegalName: true,
+                dateOfBirth: true,
+                nationality: true,
+                residentialAddress: true,
+                city: true,
+                region: true,
+                country: true,
+                idType: true,
+                idNumber: true,
+                idExpiryDate: true,
+                whatsapp: true,
+                payoutPhoneNumber: true,
+                payoutPhoneName: true,
+                bio: true,
+                languages: true,
+                completedAt: true,
+              },
+            },
+            hostVerification: {
+              select: {
+                idFrontImage: true,
+                idBackImage: true,
+                selfieImage: true,
+                ownershipDocuments: true,
+                idVerificationStatus: true,
+                ownershipVerificationStatus: true,
+                overallVerificationStatus: true,
+                idRejectionReason: true,
+                ownershipRejectionReason: true,
+                adminNotes: true,
+              },
+            },
           },
           orderBy: { hostApplicationDate: "desc" },
         }),
@@ -178,19 +214,15 @@ class HostApplicationService {
         },
       }));
 
-      const totalPages = Math.ceil(total / limit);
-      const hasNext = page < totalPages;
-      const hasPrev = page > 1;
+      const totalPages = total === 0 ? 0 : Math.ceil(total / limit);
 
       return {
         applications: applicationsWithCounts,
         pagination: {
-          currentPage: page,
-          totalPages,
-          totalItems: total,
-          itemsPerPage: limit,
-          hasNextPage: hasNext,
-          hasPrevPage: hasPrev,
+          page,
+          limit,
+          total,
+          pages: totalPages,
         },
       };
     } catch (error) {
@@ -271,9 +303,11 @@ class HostApplicationService {
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
+          role: "HOST",
           hostApprovalStatus: "APPROVED",
           hostApprovalDate: new Date(),
-          hostApprovalNotes: approvalNotes,
+          hostApprovalNotes: approvalNotes ?? null,
+          hostRejectionReason: null,
         },
         select: {
           id: true,
@@ -327,12 +361,18 @@ class HostApplicationService {
         throw new Error("Application is not pending approval");
       }
 
+      const reason =
+        typeof rejectionReason === "string" ? rejectionReason.trim() : "";
+      if (!reason) {
+        throw new Error("Rejection reason is required");
+      }
+
       // Update user status
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
           hostApprovalStatus: "REJECTED",
-          hostRejectionReason: rejectionReason,
+          hostRejectionReason: reason,
           role: "GUEST", // Revert to guest role
         },
         select: {
@@ -347,7 +387,7 @@ class HostApplicationService {
       });
 
       // Send rejection email (non-blocking)
-      sendHostRejectionEmail(user.email, user.firstName, rejectionReason).catch(
+      sendHostRejectionEmail(user.email, user.firstName, reason).catch(
         (err) => {
           console.error(
             "sendHostRejectionEmail failed:",
@@ -361,7 +401,7 @@ class HostApplicationService {
         data: {
           userId: userId,
           title: "Host Application Rejected",
-          body: `Your host application has been rejected. Reason: ${rejectionReason}`,
+          body: `Your host application has been rejected. Reason: ${reason}`,
           type: "SYSTEM",
           status: "UNREAD",
         },
@@ -388,12 +428,22 @@ class HostApplicationService {
         throw new Error("User is not a host");
       }
 
+      if (user.hostApprovalStatus === "SUSPENDED") {
+        throw new Error("Host is already suspended");
+      }
+
+      const suspensionNote =
+        typeof suspensionReason === "string" ? suspensionReason.trim() : "";
+      if (!suspensionNote) {
+        throw new Error("Suspension reason is required");
+      }
+
       // Update user status
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: {
           hostApprovalStatus: "SUSPENDED",
-          hostRejectionReason: suspensionReason,
+          hostRejectionReason: suspensionNote,
         },
         select: {
           id: true,
@@ -411,7 +461,7 @@ class HostApplicationService {
         data: {
           userId: userId,
           title: "Host Account Suspended",
-          body: `Your host account has been suspended. Reason: ${suspensionReason}`,
+          body: `Your host account has been suspended. Reason: ${suspensionNote}`,
           type: "SYSTEM",
           status: "UNREAD",
         },
@@ -426,39 +476,44 @@ class HostApplicationService {
   // Get host statistics for admin dashboard
   async getHostApplicationStats() {
     try {
+      const applicantWhere = { hostApplicationDate: { not: null } };
+
       const [pending, approved, rejected, suspended] = await Promise.all([
         prisma.user.count({
           where: {
-            role: "HOST",
+            ...applicantWhere,
             hostApprovalStatus: "PENDING",
           },
         }),
         prisma.user.count({
           where: {
-            role: "HOST",
+            ...applicantWhere,
             hostApprovalStatus: "APPROVED",
           },
         }),
         prisma.user.count({
           where: {
-            role: "HOST",
+            ...applicantWhere,
             hostApprovalStatus: "REJECTED",
           },
         }),
         prisma.user.count({
           where: {
-            role: "HOST",
+            ...applicantWhere,
             hostApprovalStatus: "SUSPENDED",
           },
         }),
       ]);
 
+      const totalApplications =
+        pending + approved + rejected + suspended;
+
       return {
-        pending,
-        approved,
-        rejected,
-        suspended,
-        total: pending + approved + rejected + suspended,
+        totalApplications,
+        pendingApplications: pending,
+        approvedApplications: approved,
+        rejectedApplications: rejected,
+        suspendedApplications: suspended,
       };
     } catch (error) {
       throw error;
