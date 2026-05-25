@@ -1,5 +1,6 @@
 const express = require("express");
 const path = require("path");
+const fs = require("fs");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
@@ -34,6 +35,12 @@ const settingsRoutes = require("./routes/settings"); // Admin settings
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// Ensure uploads directory exists (Railway ephemeral filesystem)
+const uploadsDir = path.resolve(__dirname, "../uploads");
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+}
 
 // Middleware
 // Trust reverse proxy (so req.protocol uses X-Forwarded-Proto and can be https)
