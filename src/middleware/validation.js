@@ -6,10 +6,18 @@ const { body, validationResult } = require("express-validator");
 const handleValidationErrors = (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    const details = errors.array();
+    const messages = details
+      .map((e) => (e.msg && String(e.msg).trim()) || null)
+      .filter(Boolean);
+    const message =
+      messages.length > 0
+        ? [...new Set(messages)].join("; ")
+        : "Please check your input";
     return res.status(400).json({
       error: "Validation failed",
-      message: "Please check your input",
-      details: errors.array(),
+      message,
+      details,
     });
   }
   next();
