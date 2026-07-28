@@ -202,6 +202,8 @@ class PayoutRequestService {
                 eligibleAmount: finalEligibleAmount,
                 lockedAmount: lockedFromHolding,
                 pendingPayouts: pendingPayouts.length,
+                pendingPayoutAmount: totalPendingPayouts,
+                holdingDays: HOLDING_DAYS,
                 breakdown: {
                     completedBookings,
                     totalEarned,

@@ -200,22 +200,46 @@ class HostOnboardingService {
                 }),
             ]);
 
+            const idVerificationStatus =
+                (verification && verification.idVerificationStatus) || "NOT_STARTED";
+            const ownershipVerificationStatus =
+                (verification && verification.ownershipVerificationStatus) ||
+                "NOT_REQUIRED";
+            const profileCompleted = !!(profile && profile.completedAt);
+
             const onboardingStatus = {
                 user,
+                hostApprovalStatus: user && user.hostApprovalStatus,
+                isHostApproved:
+                    !!(user && user.hostApprovalStatus === "APPROVED"),
                 profile: {
-                    completed: !!(profile && profile.completedAt),
+                    completed: profileCompleted,
                     data: profile,
                 },
                 verification: {
-                    idVerification:
-                        (verification && verification.idVerificationStatus) || "PENDING",
-                    ownershipVerification:
-                        (verification && verification.ownershipVerificationStatus) ||
-                        "NOT_REQUIRED",
+                    idVerification: idVerificationStatus,
+                    ownershipVerification: ownershipVerificationStatus,
                     overall:
                         (verification && verification.overallVerificationStatus) ||
                         "PENDING",
                     data: verification,
+                },
+                steps: {
+                    profile: profileCompleted ? "COMPLETED" : "NOT_STARTED",
+                    idVerification: verification && verification.idFrontImage
+                        ? idVerificationStatus === "VERIFIED"
+                            ? "COMPLETED"
+                            : "PENDING"
+                        : "NOT_STARTED",
+                    ownershipDocs:
+                        ownershipVerificationStatus === "NOT_REQUIRED"
+                            ? "NOT_REQUIRED"
+                            : verification && verification.ownershipDocuments &&
+                                verification.ownershipDocuments.length > 0
+                              ? ownershipVerificationStatus === "VERIFIED"
+                                  ? "COMPLETED"
+                                  : "PENDING"
+                              : "NOT_STARTED",
                 },
                 completionPercentage: this.calculateCompletionPercentage(
                     profile,

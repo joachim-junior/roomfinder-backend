@@ -119,16 +119,16 @@ class EnquiryService {
         );
       });
 
-      // Create notification for host
       await notificationService.createNotification({
         userId: property.host.id,
-        type: "EMAIL",
+        type: "PUSH",
         title: "New Property Enquiry",
-        body: `You have a new enquiry for "${property.title}" from ${guest.firstName} ${guest.lastName}`,
+        body: `New enquiry for "${property.title}" from ${guest.firstName} ${guest.lastName}`,
         data: {
           enquiryId: enquiry.id,
           propertyId: property.id,
           guestId: guest.id,
+          type: "enquiry",
         },
       });
 
@@ -389,16 +389,16 @@ class EnquiryService {
         );
       });
 
-      // Create notification for guest
       await notificationService.createNotification({
         userId: enquiry.guest.id,
-        type: "EMAIL",
+        type: "PUSH",
         title: "Response to Your Enquiry",
-        body: `${enquiry.host.firstName} has responded to your enquiry about "${enquiry.property.title}"`,
+        body: `${enquiry.host.firstName} responded about "${enquiry.property.title}"`,
         data: {
           enquiryId: enquiry.id,
           propertyId: enquiry.property.id,
           hostId: enquiry.host.id,
+          type: "enquiry",
         },
       });
 

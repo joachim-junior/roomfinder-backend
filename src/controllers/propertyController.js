@@ -63,91 +63,68 @@ const createProperty = async (req, res) => {
           message: "The specified host is not approved to create properties",
         });
       }
-    } else {
-      // For regular hosts, validate their permissions
-      if (req.user.role !== "HOST" && req.user.role !== "ADMIN") {
-        return res.status(403).json({
-          error: "Access denied",
-          message: "Only hosts can create properties",
-        });
-      }
-
-      // Check if user email is verified (for HOST role)
-      if (req.user.role === "HOST" && !req.user.isVerified) {
-        return res.status(403).json({
-          error: "Email verification required",
-          message:
-            "Please verify your email address before creating properties. Check your email for the verification link.",
-        });
-      }
-
-      // Check if host is approved (for HOST role)
-      if (
-        req.user.role === "HOST" &&
-        req.user.hostApprovalStatus !== "APPROVED"
-      ) {
-        if (req.user.hostApprovalStatus === "PENDING") {
-          return res.status(403).json({
-            error: "Host approval pending",
-            message:
-              "Your host application is currently under review. We will contact you once your application is approved.",
-          });
-        } else if (req.user.hostApprovalStatus === "REJECTED") {
-          return res.status(403).json({
-            error: "Host application rejected",
-            message:
-              "Your host application was rejected. Please contact support for more information.",
-          });
-        } else if (req.user.hostApprovalStatus === "SUSPENDED") {
-          return res.status(403).json({
-            error: "Host account suspended",
-            message:
-              "Your host account has been suspended. Please contact support for more information.",
-          });
-        }
-      }
+    } else if (req.user.role !== "HOST" && req.user.role !== "ADMIN") {
+      return res.status(403).json({
+        error: "Access denied",
+        message: "Only hosts can create properties",
+      });
+    } else if (
+      req.user.role === "HOST" &&
+      req.user.hostApprovalStatus === "SUSPENDED"
+    ) {
+      return res.status(403).json({
+        error: "Host account suspended",
+        message:
+          "Your host account is suspended. Contact support if you need help.",
+      });
     }
 
-    // Additional validation for required fields
-    if (!title || !description || !address || !city || !state || !country) {
+    const missing = [];
+    if (!title?.trim()) missing.push("title");
+    if (!description?.trim()) missing.push("description");
+    if (!city?.trim()) missing.push("city");
+    if (!state?.trim()) missing.push("state");
+
+    if (missing.length > 0) {
       return res.status(400).json({
         error: "Missing required fields",
-        message:
-          "Title, description, address, city, state, and country are required",
+        message: `Please add: ${missing.join(", ")}`,
       });
     }
 
-    if (!price || price <= 0) {
+    const priceNum = parseFloat(price);
+    if (!price || Number.isNaN(priceNum) || priceNum <= 0) {
       return res.status(400).json({
         error: "Invalid price",
-        message: "Price must be greater than 0",
+        message: "Enter a nightly price greater than 0 XAF",
       });
     }
 
-    if (!bedrooms || bedrooms <= 0 || !bathrooms || bathrooms <= 0) {
-      return res.status(400).json({
-        error: "Invalid room count",
-        message: "Bedrooms and bathrooms must be greater than 0",
-      });
-    }
+    const bedroomsNum = Math.max(1, parseInt(bedrooms, 10) || 1);
+    const bathroomsNum = Math.max(1, parseInt(bathrooms, 10) || 1);
+    const maxGuestsNum = Math.max(1, parseInt(maxGuests, 10) || 1);
+    const resolvedAddress =
+      (address && String(address).trim()) ||
+      [city, state, country].filter(Boolean).join(", ");
+    const resolvedCountry = (country && String(country).trim()) || "Cameroon";
 
     const property = await prisma.property.create({
       data: {
-        title,
-        description,
-        type,
-        address,
-        city,
-        state,
-        country,
+        title: String(title).trim(),
+        description: String(description).trim(),
+        type: type || "VILLA",
+        address: resolvedAddress,
+        city: String(city).trim(),
+        state: String(state).trim(),
+        country: resolvedCountry,
         zipCode,
         latitude: latitude ? parseFloat(latitude) : null,
         longitude: longitude ? parseFloat(longitude) : null,
-        price: parseFloat(price),
+        price: priceNum,
         currency,
-        bedrooms: parseInt(bedrooms),
-        bathrooms: parseInt(bathrooms),
-        maxGuests: parseInt(maxGuests),
+        bedrooms: bedroomsNum,
+        bathrooms: bathroomsNum,
+        maxGuests: maxGuestsNum,
         amenities: Array.isArray(amenities) ? amenities : [],
         images: Array.isArray(images) ? images : [],
         hostId,

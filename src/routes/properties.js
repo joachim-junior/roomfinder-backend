@@ -4,13 +4,8 @@ const propertyController = require("../controllers/propertyController");
 const {
   authenticateToken,
   requireRole,
-  requireVerification,
   optionalAuth,
 } = require("../middleware/auth");
-const {
-  validateProperty,
-  validatePropertyUpdate,
-} = require("../middleware/validation");
 
 // Public routes (with optional authentication)
 router.get("/", optionalAuth, propertyController.getProperties);
@@ -37,14 +32,12 @@ router.use(authenticateToken);
 
 router.post(
   "/",
-  validateProperty,
   requireRole(["HOST", "ADMIN"]),
-  requireVerification,
   propertyController.createProperty
 );
 
 // Property management (owner or admin only)
-router.put("/:id", validatePropertyUpdate, propertyController.updateProperty);
+router.put("/:id", propertyController.updateProperty);
 router.delete("/:id", propertyController.deleteProperty);
 
 module.exports = router;

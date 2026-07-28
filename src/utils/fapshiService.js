@@ -341,47 +341,48 @@ class FapshiService {
                 },
             });
 
-            // Calculate platform fees (5% of total amount)
-            const platformFee = Math.floor(event.amount * 0.05);
-            const hostAmount = event.amount - platformFee;
+            // Credit host wallet (revenue config fees, idempotent)
+            const { creditHostForBookingPayment } = require("./hostWalletCredit");
+            const creditResult = await creditHostForBookingPayment(bookingId, {
+                reference: event.financialTransId || event.transId,
+                payerMetadata: {
+                    medium: event.medium,
+                    payerName: event.payerName,
+                    email: event.email,
+                    totalPaid: event.amount,
+                    fapshiTransId: event.transId,
+                },
+            });
 
-            // Ensure host wallet exists
-            let hostWallet = booking.property.host.wallet;
-            if (!hostWallet) {
-                hostWallet = await prisma.wallet.create({
+            if (!creditResult.alreadyCredited && creditResult.feeCalculation) {
+                await prisma.platformRevenue.create({
                     data: {
-                        userId: booking.property.host.id,
-                        balance: 0,
+                        amount: creditResult.feeCalculation.platformRevenue,
                         currency: "XAF",
+                        revenueType: "BOOKING_FEE",
+                        description: `Platform fee from booking ${bookingId}`,
+                        bookingId,
+                        metadata: JSON.stringify({
+                            bookingId,
+                            hostId: booking.property.host.id,
+                            guestId: booking.guest.id,
+                            reference: event.transId,
+                        }),
                     },
                 });
             }
 
-            // Update host wallet balance
-            await prisma.wallet.update({
-                where: { id: hostWallet.id },
-                data: {
-                    balance: { increment: hostAmount },
-                },
+            // Confirm booking
+            await prisma.booking.update({
+                where: { id: bookingId },
+                data: { status: "CONFIRMED" },
             });
 
-            // Create platform revenue record
-            await prisma.platformRevenue.create({
-                data: {
-                    amount: platformFee,
-                    currency: "XAF",
-                    revenueType: "BOOKING_FEE",
-                    description: `Platform fee from booking ${bookingId}`,
-                    metadata: JSON.stringify({
-                        bookingId: bookingId,
-                        hostId: booking.property.host.id,
-                        guestId: booking.guest.id,
-                        reference: event.transId,
-                    }),
-                },
-            });
-
-            return { success: true, message: "Payment completed successfully" };
+            return {
+                success: true,
+                message: "Payment completed successfully",
+                hostAmount: creditResult.hostAmount,
+            };
         } catch (error) {
             console.error("Error handling successful payment:", error);
             throw error;

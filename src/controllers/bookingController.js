@@ -775,89 +775,18 @@ const handlePaymentWebhook = async (req, res) => {
     // Update booking based on payment status
     let bookingStatus = "PENDING";
     let paymentStatus = "PENDING";
+    let hostAmount = 0;
 
     if (status === "SUCCESSFUL") {
       bookingStatus = "CONFIRMED";
       paymentStatus = "COMPLETED";
 
-      // Calculate fees using revenue service
-      const revenueService = require("../utils/revenueService");
-      const feeCalculation = await revenueService.calculateBookingFees(
-        booking.property.price,
-        "XAF",
-        booking.property.hostId
-      );
-
-      // Credit host wallet (original amount minus host fee)
-      const hostAmount = Math.floor(feeCalculation.netAmountForHost);
-      await prisma.wallet.update({
-        where: { userId: booking.property.hostId },
-        data: {
-          balance: {
-            increment: hostAmount,
-          },
-        },
+      const { creditHostForBookingPayment } = require("../utils/hostWalletCredit");
+      const creditResult = await creditHostForBookingPayment(booking.id, {
+        reference: financialTransId || transId,
+        payerMetadata: { medium, payerName, email, totalPaid: amount },
       });
-
-      // Create transaction record for host payment
-      await prisma.transaction.create({
-        data: {
-          userId: booking.property.hostId,
-          amount: hostAmount,
-          type: "CREDIT",
-          description: `Payment received for booking ${booking.id}`,
-          reference: financialTransId,
-          status: "COMPLETED",
-          metadata: JSON.stringify({
-            bookingId: booking.id,
-            originalAmount: booking.totalPrice,
-            hostServiceFee: feeCalculation.hostServiceFee,
-            guestServiceFee: feeCalculation.guestServiceFee,
-            medium: medium,
-            payerName: payerName,
-            feeCalculation: feeCalculation,
-          }),
-        },
-      });
-
-      // Create transaction record for host service fee (deducted from host)
-      await prisma.transaction.create({
-        data: {
-          userId: booking.property.hostId,
-          amount: feeCalculation.hostServiceFee,
-          type: "DEBIT",
-          description: `Host service fee for booking ${booking.id}`,
-          reference: `HOST_FEE_${financialTransId}`,
-          status: "COMPLETED",
-          metadata: JSON.stringify({
-            bookingId: booking.id,
-            originalAmount: booking.totalPrice,
-            feeType: "HOST_SERVICE_FEE",
-            feePercent: feeCalculation.config.hostServiceFeePercent,
-            medium: medium,
-          }),
-        },
-      });
-
-      // Create transaction record for guest service fee (guest already paid this)
-      await prisma.transaction.create({
-        data: {
-          userId: booking.guestId,
-          amount: feeCalculation.guestServiceFee,
-          type: "DEBIT",
-          description: `Guest service fee for booking ${booking.id}`,
-          reference: `GUEST_FEE_${financialTransId}`,
-          status: "COMPLETED",
-          metadata: JSON.stringify({
-            bookingId: booking.id,
-            originalAmount: booking.totalPrice,
-            feeType: "GUEST_SERVICE_FEE",
-            feePercent: feeCalculation.config.guestServiceFeePercent,
-            medium: medium,
-            totalPaid: amount, // Total amount guest actually paid
-          }),
-        },
-      });
+      hostAmount = creditResult.hostAmount;
     } else if (status === "FAILED" || status === "EXPIRED") {
       bookingStatus = "CANCELLED";
       paymentStatus = "FAILED";
@@ -895,21 +824,19 @@ const handlePaymentWebhook = async (req, res) => {
         },
       });
 
-      // Send notification to host
-      if (status === "SUCCESSFUL") {
-        await prisma.notification.create({
-          data: {
-            userId: booking.property.hostId,
-            type: "PAYMENT_RECEIVED",
-            title: "Payment Received",
-            body: `You have received ${hostAmount} XAF for booking ${booking.id}`,
-            metadata: JSON.stringify({
-              bookingId: booking.id,
-              amount: hostAmount,
-              guestName: `${booking.guest.firstName} ${booking.guest.lastName}`,
-            }),
-          },
-        });
+      // Notify host (in-app record + device push)
+      if (status === "SUCCESSFUL" && hostAmount > 0) {
+        const firebaseService = require("../utils/firebaseService");
+        firebaseService
+          .sendPushNotification(
+            booking.property.hostId,
+            "Payment Received",
+            `You received ${hostAmount} XAF for a new booking.`,
+            { bookingId: booking.id, type: "payment" }
+          )
+          .catch((err) => {
+            console.error("Host payment push failed:", err.message);
+          });
       }
     } catch (notificationError) {
       console.error("Notification error:", notificationError);

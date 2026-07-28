@@ -1,5 +1,8 @@
 const admin = require("firebase-admin");
+const { Expo } = require("expo-server-sdk");
 const { prisma } = require("./database");
+
+const expoClient = new Expo();
 
 class FirebaseService {
     constructor() {
@@ -122,132 +125,288 @@ class FirebaseService {
     }
 
     /**
-     * Send push notification to a single user
+     * FCM requires string values in the data payload.
      */
-    async sendPushNotification(userId, title, body, data = {}) {
-        try {
-            // Get user's device tokens
-            const deviceTokens = await prisma.deviceToken.findMany({
-                where: {
-                    userId,
-                    isActive: true,
-                },
-                select: {
-                    token: true,
-                    platform: true,
-                },
+    stringifyPushData(data = {}) {
+        const out = {};
+        for (const [key, value] of Object.entries(data)) {
+            if (value === undefined || value === null) continue;
+            out[key] =
+                typeof value === "string" ? value : JSON.stringify(value);
+        }
+        return out;
+    }
+
+    isExpoPushToken(token) {
+        return (
+            typeof token === "string" &&
+            (Expo.isExpoPushToken(token) ||
+                token.startsWith("ExponentPushToken[") ||
+                token.startsWith("ExpoPushToken"))
+        );
+    }
+
+    /**
+     * Send via Expo Push API (required for Expo/React Native app tokens).
+     */
+    async sendExpoPushNotifications(tokens, title, body, data = {}) {
+        const results = [];
+        const messages = [];
+
+        for (const token of tokens) {
+            if (!this.isExpoPushToken(token)) continue;
+            messages.push({
+                to: token,
+                sound: "default",
+                title,
+                body,
+                data: this.stringifyPushData(data),
+                channelId: "room_finder_default",
+                priority: "high",
             });
+        }
 
-            if (deviceTokens.length === 0) {
-                return {
-                    success: false,
-                    message: "No active device tokens found for user",
-                };
-            }
+        if (messages.length === 0) {
+            return { results, successCount: 0, failureCount: 0 };
+        }
 
-            const results = [];
-            const tokens = deviceTokens.map((dt) => dt.token);
-
-            // Send to all user's devices
-            const message = {
-                notification: {
-                    title,
-                    body,
-                },
-                data: {
-                    ...data,
-                    click_action: "FLUTTER_NOTIFICATION_CLICK", // For Flutter apps
-                    sound: "default",
-                    badge: "1",
-                },
-                android: {
-                    notification: {
-                        sound: "default",
-                        channel_id: "room_finder_channel",
-                        priority: "high",
-                        default_sound: true,
-                        default_vibrate_timings: true,
-                        default_light_settings: true,
-                    },
-                },
-                apns: {
-                    payload: {
-                        aps: {
-                            sound: "default",
-                            badge: 1,
-                            alert: {
-                                title,
-                                body,
-                            },
-                        },
-                    },
-                },
-                tokens,
-            };
-
-            // Check if Firebase messaging is available and send notification
-            let response;
+        const chunks = expoClient.chunkPushNotifications(messages);
+        for (const chunk of chunks) {
             try {
-                if (!admin.apps.length) {
-                    throw new Error("Firebase not initialized");
-                }
-                response = await admin.messaging().sendMulticast(message);
-            } catch (error) {
-                console.error("Firebase messaging error:", error.message);
-                return {
-                    success: false,
-                    message: "Firebase messaging service not available: " + error.message,
-                };
-            }
-
-            // Handle results
-            response.responses.forEach((result, index) => {
-                if (result.success) {
-                    results.push({
-                        token: tokens[index],
-                        success: true,
-                    });
-                } else {
-                    console.error(
-                        "Failed to send to token:",
-                        tokens[index],
-                        result.error
-                    );
-
-                    // If token is invalid, mark it as inactive
-                    if (
-                        result.error.code === "messaging/invalid-registration-token" ||
-                        result.error.code === "messaging/registration-token-not-registered"
-                    ) {
-                        this.markTokenInactive(tokens[index]);
+                const ticketChunk = await expoClient.sendPushNotificationsAsync(
+                    chunk
+                );
+                ticketChunk.forEach((ticket, index) => {
+                    const token = chunk[index].to;
+                    if (ticket.status === "ok") {
+                        results.push({ token, success: true });
+                    } else {
+                        console.error(
+                            "Expo push ticket error:",
+                            token,
+                            ticket.message,
+                            ticket.details
+                        );
+                        if (
+                            ticket.details &&
+                            ticket.details.error === "DeviceNotRegistered"
+                        ) {
+                            this.markTokenInactive(token);
+                        }
+                        results.push({
+                            token,
+                            success: false,
+                            error: ticket.message,
+                        });
                     }
-
+                });
+            } catch (error) {
+                console.error("Expo push chunk error:", error.message);
+                chunk.forEach((msg) => {
                     results.push({
-                        token: tokens[index],
+                        token: msg.to,
                         success: false,
-                        error: result.error.message,
+                        error: error.message,
                     });
-                }
+                });
+            }
+        }
+
+        const successCount = results.filter((r) => r.success).length;
+        return {
+            results,
+            successCount,
+            failureCount: results.length - successCount,
+        };
+    }
+
+    /**
+     * Send via Firebase Cloud Messaging (native FCM tokens only).
+     */
+    async sendFcmPushNotifications(tokens, title, body, data = {}) {
+        const results = [];
+        const fcmTokens = tokens.filter((t) => !this.isExpoPushToken(t));
+
+        if (fcmTokens.length === 0) {
+            return { results, successCount: 0, failureCount: 0 };
+        }
+
+        if (!admin.apps.length) {
+            console.warn("Firebase not initialized; skipping FCM push");
+            fcmTokens.forEach((token) => {
+                results.push({
+                    token,
+                    success: false,
+                    error: "Firebase not initialized",
+                });
             });
-
-            // Store notification in database
-            await prisma.notification.create({
-                data: {
-                    userId,
-                    title,
-                    body,
-                    type: "PUSH",
-                    status: "SENT",
-                    data: JSON.stringify(data),
-                },
-            });
-
-            const successCount = results.filter((r) => r.success).length;
-            const failureCount = results.length - successCount;
-
             return {
-                success: true,
-                message: `Push notification sent to ${successCount} devices`,
+                results,
+                successCount: 0,
+                failureCount: results.length,
+            };
+        }
+
+        const message = {
+            notification: { title, body },
+            data: {
+                ...this.stringifyPushData(data),
+                click_action: "FLUTTER_NOTIFICATION_CLICK",
+            },
+            android: {
+                notification: {
+                    sound: "default",
+                    channelId: "room_finder_default",
+                    priority: "high",
+                },
+            },
+            apns: {
+                payload: {
+                    aps: {
+                        sound: "default",
+                        badge: 1,
+                        alert: { title, body },
+                    },
+                },
+            },
+            tokens: fcmTokens,
+        };
+
+        let response;
+        try {
+            response = await admin.messaging().sendEachForMulticast(message);
+        } catch (error) {
+            console.error("FCM multicast error:", error.message);
+            fcmTokens.forEach((token) => {
+                results.push({
+                    token,
+                    success: false,
+                    error: error.message,
+                });
+            });
+            return {
+                results,
+                successCount: 0,
+                failureCount: results.length,
+            };
+        }
+
+        response.responses.forEach((result, index) => {
+            const token = fcmTokens[index];
+            if (result.success) {
+                results.push({ token, success: true });
+            } else {
+                console.error("FCM push failed:", token, result.error);
+                if (
+                    result.error &&
+                    (result.error.code ===
+                        "messaging/invalid-registration-token" ||
+                        result.error.code ===
+                            "messaging/registration-token-not-registered")
+                ) {
+                    this.markTokenInactive(token);
+                }
+                results.push({
+                    token,
+                    success: false,
+                    error: result.error ? result.error.message : "Unknown",
+                });
+            }
+        });
+
+        const successCount = results.filter((r) => r.success).length;
+        return {
+            results,
+            successCount,
+            failureCount: results.length - successCount,
+        };
+    }
+
+    /**
+     * Check whether push delivery is allowed for this user and notification payload.
+     */
+    async shouldDeliverPushToUser(userId, data = {}) {
+        const preferences = await prisma.userNotificationPreferences.findUnique({
+            where: { userId },
+        });
+
+        const pushEnabled = preferences?.pushNotifications ?? true;
+        if (!pushEnabled) {
+            return {
+                allowed: false,
+                reason: "User has disabled push notifications",
+            };
+        }
+
+        const type = typeof data.type === "string" ? data.type.toLowerCase() : "";
+        const isBooking =
+            type.includes("booking") || Boolean(data.bookingId);
+        const isReview = type.includes("review");
+
+        if (isBooking && preferences?.bookingNotifications === false) {
+            return {
+                allowed: false,
+                reason: "User has disabled booking notifications",
+            };
+        }
+
+        if (isReview && preferences?.reviewNotifications === false) {
+            return {
+                allowed: false,
+                reason: "User has disabled review notifications",
+            };
+        }
+
+        return { allowed: true };
+    }
+
+    /**
+     * Deliver push to devices without writing a notification row.
+     */
+    async deliverPushToUser(userId, title, body, data = {}) {
+        const preferenceCheck = await this.shouldDeliverPushToUser(userId, data);
+        if (!preferenceCheck.allowed) {
+            return {
+                success: false,
+                message: preferenceCheck.reason,
+                skipped: true,
+            };
+        }
+
+        const deviceTokens = await prisma.deviceToken.findMany({
+            where: { userId, isActive: true },
+            select: { token: true, platform: true },
+        });
+
+        if (deviceTokens.length === 0) {
+            return {
+                success: false,
+                message: "No active device tokens found for user",
+            };
+        }
+
+        const tokens = deviceTokens.map((dt) => dt.token);
+        const expoResult = await this.sendExpoPushNotifications(
+            tokens,
+            title,
+            body,
+            data
+        );
+        const fcmResult = await this.sendFcmPushNotifications(
+            tokens,
+            title,
+            body,
+            data
+        );
+
+        const results = [...expoResult.results, ...fcmResult.results];
+        const successCount = expoResult.successCount + fcmResult.successCount;
+        const failureCount = expoResult.failureCount + fcmResult.failureCount;
+
+        if (successCount === 0) {
+            return {
+                success: false,
+                message: "Failed to deliver push to registered devices",
                 results: {
                     total: results.length,
                     success: successCount,
@@ -255,6 +414,43 @@ class FirebaseService {
                     details: results,
                 },
             };
+        }
+
+        return {
+            success: true,
+            message: `Push notification sent to ${successCount} device(s)`,
+            results: {
+                total: results.length,
+                success: successCount,
+                failure: failureCount,
+                details: results,
+            },
+        };
+    }
+
+    /**
+     * Send push notification to a single user (Expo + FCM) and store in DB.
+     */
+    async sendPushNotification(userId, title, body, data = {}) {
+        try {
+            const result = await this.deliverPushToUser(userId, title, body, data);
+
+            await prisma.notification.create({
+                data: {
+                    userId,
+                    title,
+                    body,
+                    type: "PUSH",
+                    status: result.success ? "SENT" : "FAILED",
+                    data: JSON.stringify(
+                        result.skipped
+                            ? { ...data, skippedReason: result.message }
+                            : data
+                    ),
+                },
+            });
+
+            return result;
         } catch (error) {
             console.error("Error sending push notification:", error);
             return { success: false, error: error.message };
@@ -456,6 +652,7 @@ class FirebaseService {
                     id: true,
                     token: true,
                     platform: true,
+                    isActive: true,
                     createdAt: true,
                     lastUsed: true,
                 },

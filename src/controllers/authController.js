@@ -18,6 +18,40 @@ const {
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+/** Fields safe to return to clients (additive — does not change existing keys). */
+const publicUserSelect = {
+  id: true,
+  email: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+  isVerified: true,
+  phone: true,
+  avatar: true,
+  hostApprovalStatus: true,
+  createdAt: true,
+};
+
+const toPublicUser = (user, { includeUpdatedAt = false } = {}) => {
+  if (!user) return null;
+  const publicUser = {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    role: user.role,
+    isVerified: user.isVerified,
+    phone: user.phone,
+    avatar: user.avatar,
+    hostApprovalStatus: user.hostApprovalStatus ?? null,
+    createdAt: user.createdAt,
+  };
+  if (includeUpdatedAt) {
+    publicUser.updatedAt = user.updatedAt;
+  }
+  return publicUser;
+};
+
 /**
  * Register a new user
  */
@@ -64,17 +98,7 @@ const register = async (req, res) => {
         emailVerificationToken: verificationToken,
         emailVerificationExpires: verificationExpires,
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isVerified: true,
-        phone: true,
-        avatar: true,
-        createdAt: true,
-      },
+      select: publicUserSelect,
     });
 
     // Send verification email
@@ -137,22 +161,9 @@ const login = async (req, res) => {
       expiresIn: process.env.JWT_EXPIRES_IN,
     });
 
-    // Return user data (without password)
-    const userData = {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      isVerified: user.isVerified,
-      phone: user.phone,
-      avatar: user.avatar,
-      createdAt: user.createdAt,
-    };
-
     res.json({
       message: "Login successful",
-      user: userData,
+      user: toPublicUser(user),
       token,
     });
   } catch (error) {
@@ -170,22 +181,14 @@ const getProfile = async (req, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
       select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isVerified: true,
-        phone: true,
-        avatar: true,
-        createdAt: true,
+        ...publicUserSelect,
         updatedAt: true,
       },
     });
 
     res.json({
       message: "Profile retrieved successfully",
-      user,
+      user: toPublicUser(user, { includeUpdatedAt: true }),
     });
   } catch (error) {
     console.error("Get profile error:", error);
@@ -210,22 +213,14 @@ const updateProfile = async (req, res) => {
         avatar,
       },
       select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isVerified: true,
-        phone: true,
-        avatar: true,
-        createdAt: true,
+        ...publicUserSelect,
         updatedAt: true,
       },
     });
 
     res.json({
       message: "Profile updated successfully",
-      user: updatedUser,
+      user: toPublicUser(updatedUser, { includeUpdatedAt: true }),
     });
   } catch (error) {
     console.error("Update profile error:", error);
@@ -634,19 +629,11 @@ const googleAuth = async (req, res) => {
         expiresIn: process.env.JWT_EXPIRES_IN,
       });
 
-      const userData = {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        isVerified: user.isVerified,
-        phone: user.phone,
-        avatar: user.avatar,
-        createdAt: user.createdAt,
-      };
-
-      return res.json({ message: "Login successful", user: userData, token });
+      return res.json({
+        message: "Login successful",
+        user: toPublicUser(user),
+        token,
+      });
     }
 
     // New user — create account with a random password they'll never use directly
@@ -663,17 +650,7 @@ const googleAuth = async (req, res) => {
         isVerified: !!email_verified,
         avatar: picture || null,
       },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        role: true,
-        isVerified: true,
-        phone: true,
-        avatar: true,
-        createdAt: true,
-      },
+      select: publicUserSelect,
     });
 
     // Send welcome email (non-blocking)
@@ -687,7 +664,7 @@ const googleAuth = async (req, res) => {
 
     res.status(201).json({
       message: "Account created successfully with Google.",
-      user,
+      user: toPublicUser(user),
       token,
     });
   } catch (error) {
